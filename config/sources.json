@@ -1,0 +1,38 @@
+{
+	"default_crs": "epsg:28992",
+	"boundaries": {
+		"administrations": {
+			"type": "file",
+			"path": "..\\data\\sources\\Waterschapsgrenzen_4258.gml",
+			"id_field": "wbh_code_objectidentificatie"
+		}
+	},
+	"water_lines": {
+		"rijnland_waterlopen": {
+			"type": "file",
+			"path": "..\\data\\sources\\rijnland\\watergangen\\Watergang_as.shp"
+		},
+		"v&v_waterlopen": {
+			"type": "arcrest",
+			"url": "https://services1.arcgis.com/ug8NBKcLHVNmdmdt/ArcGIS/rest/services/Legger_Watersysteem/FeatureServer/14"
+		},
+		"waternet_waterlopen": {
+			"type": "file",
+			"path": "..\\data\\sources\\Waternet\\Gegevenslevering_Waternet\\Oppervlaktewater_lijn.shp"
+		},
+		"hydamo_waterlopen": {
+			"type": "wfs",
+			"url": "https://data.nhi.nu/geoserver/ows",
+			"layer": "oppervlaktewater_1:hydroobject"
+		},
+		"h&a_waterlopen": {
+			"type": "wfs",
+			"url": "https://opendata.hunzeenaas.nl/geoserver/ows",
+			"layer": "OpenData:Hoofdwatergang"
+		},
+		"schieland_waterlopen": {
+			"type": "arcrest",
+			"url": "https://services.arcgis.com/OnnVX2wGkBfflKqu/ArcGIS/rest/services/HHSK_Legger_Watersysteem/FeatureServer/11"
+		}
+	}
+}
