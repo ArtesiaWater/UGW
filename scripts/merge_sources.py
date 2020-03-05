@@ -12,14 +12,18 @@ admins = json.loads(open(r'..\config\administrations.json','r').read())
 sources = json.loads(open(r'..\config\sources.json','r').read())
 
 #%% 
-def set_crs(gdf):
-    default_crs = sources['default_crs']
+def set_crs(gdf, csr=None):
+    if csr is None:
+        crs = sources['default_crs']
     if gdf.crs == None: 
-        gdf.crs = default_crs
+        gdf.crs = crs
     else:
-       if not pyproj.CRS(gdf.crs).equals(pyproj.CRS(sources['default_crs'])):
-           gdf = gdf.to_crs(sources['default_crs'])
-           
+        if hasattr(pyproj,'CRS'):
+            update_crs = not pyproj.CRS(gdf.crs).equals(pyproj.CRS(crs))
+        else:
+            update_crs = pyproj.Proj(gdf.crs).srs != pyproj.Proj(init=crs).srs
+        if update_crs:
+            gdf = gdf.to_crs({'init':crs})
     return gdf
 
 class WFS:
