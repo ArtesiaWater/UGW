@@ -12,18 +12,21 @@ admins = json.loads(open(r'..\config\administrations.json','r').read())
 sources = json.loads(open(r'..\config\sources.json','r').read())
 
 #%% 
-def set_crs(gdf, csr=None):
-    if csr is None:
-        crs = sources['default_crs']
+def set_crs(gdf, crs=sources['default_crs']):
     if gdf.crs == None: 
         gdf.crs = crs
-    else:
-        if hasattr(pyproj,'CRS'):
-            update_crs = not pyproj.CRS(gdf.crs).equals(pyproj.CRS(crs))
-        else:
-            update_crs = pyproj.Proj(gdf.crs).srs != pyproj.Proj(init=crs).srs
-        if update_crs:
-            gdf = gdf.to_crs({'init':crs})
+    elif not pyproj.Proj(gdf.crs).is_exact_same(pyproj.Proj(crs)):
+        gdf = gdf.to_crs({'init':crs})
+        
+    # stukjes wellicht nodig om het bij pyproj < 2 werkend te krijgen    
+    # else:
+    #     if hasattr(pyproj,'CRS'):
+    #         update_crs = not pyproj.CRS(gdf.crs).equals(pyproj.CRS(crs))
+    #     else:
+    #         update_crs = pyproj.Proj(gdf.crs).srs != pyproj.Proj(init=crs).srs
+    #     if update_crs:
+    #         gdf = gdf.to_crs({'init':crs})
+    
     return gdf
 
 class WFS:
@@ -87,7 +90,6 @@ class ArcREST:
         
         url = self.query.format(url=self.url,min_objects=0,max_objects=1000000,epsg=self.epsg)
         url = '{}&returnIdsOnly=true'.format(url)
-        print(url)
         response = requests.get(url)
         object_ids = response.json()['properties']['objectIds']
         object_ids.sort()
