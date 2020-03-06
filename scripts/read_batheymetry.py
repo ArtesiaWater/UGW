@@ -9,7 +9,7 @@ import rasterio
 from rasterio.enums import Resampling
 import numpy as np
 
-bag_file = r'..\data\sources\Rijkswaterstaat\MN_zuid_NAP.bag'
+bag_file = r'..\data\MN_zuid_NAP.bag'
 tif_file = r'..\data\MN_zuid_NAP.tif'
 nodata = 32767
 dtype = rasterio.int16

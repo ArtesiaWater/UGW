@@ -19,10 +19,6 @@
 		"id": 8,
 		"water_src": "v&v_waterlopen"
 	},
-	"H&A": {
-		"id": 33,
-		"water_src": "h&a_waterlopen"
-	},
 	"Waternet": {
 		"id": 31,
 		"water_src": "waternet_waterlopen"
