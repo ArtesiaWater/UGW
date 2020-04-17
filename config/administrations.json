@@ -1,26 +1,15 @@
-{
-	"Rijnland": {
-		"id": 13,
-		"water_src": "rijnland_waterlopen"
+{"administrations":{
+	"Rijnland":13,
+	"HSK":39,
+	"HDSR":14,
+	"Rivierenland":9,
+	"V&V":8,
+	"H&A":44,
+	"Waternet":31
 	},
-	"Rivierenland": {
-		"id": 9,
-		"water_src": "hydamo_waterlopen"
-	},
-	"Schieland": {
-		"id": 39,
-		"water_src": "schieland_waterlopen"
-	},
-	"HDSR": {
-		"id": 14,
-		"water_src": "hydamo_waterlopen"
-	},
-	"V&V": {
-		"id": 8,
-		"water_src": "v&v_waterlopen"
-	},
-	"Waternet": {
-		"id": 31,
-		"water_src": "waternet_waterlopen"
+	"boundaries": {
+		"type": "file",
+		"path": "..\\data\\sources\\Waterschapsgrenzen_4258.gml",
+		"id_field": "wbh_code_objectidentificatie"
 	}
 }

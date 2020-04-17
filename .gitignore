@@ -130,4 +130,6 @@ dmypy.json
 
 data/*
 
-!data/.gitkeep 
+!data/.gitkeep
+!data/input/.gitkeep
+!data/modflow/.gitkeep  

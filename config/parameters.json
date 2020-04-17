@@ -1,0 +1,74 @@
+{
+	"output": [
+		{
+			"id": "z_bov",
+			"name": "zomerpeil benedenstrooms",
+			"unit": "m NAP"
+		},
+		{
+			"id": "z_ben",
+			"name": "zomerpeil bovenstrooms",
+			"unit": "m NAP"
+		},
+		{
+			"id": "zp_bov",
+			"name": "zomerpeil benedenstrooms",
+			"unit": "m NAP"
+		},
+		{
+			"id": "zp_ben",
+			"name": "zomerpeil benedenstrooms",
+			"unit": "m NAP"
+		},
+		{
+			"id": "wp_bov",
+			"name": "zomerpeil benedenstrooms",
+			"unit": "m NAP"
+		},
+		{
+			"id": "wp_ben",
+			"name": "zomerpeil benedenstrooms",
+			"unit": "m NAP"
+		},
+		{
+			"id": "bh_bov",
+			"name": "zomerpeil benedenstrooms",
+			"unit": "m NAP"
+		},
+		{
+			"id": "bh_ben",
+			"name": "zomerpeil benedenstrooms",
+			"unit": "m NAP"
+		},
+		{
+			"id": "bb_bov",
+			"name": "zomerpeil benedenstrooms",
+			"unit": "m NAP"
+		},
+		{
+			"id": "bb_ben",
+			"name": "zomerpeil benedenstrooms",
+			"unit": "m NAP"
+		},
+		{
+			"id": "a_bov",
+			"name": "zomerpeil benedenstrooms",
+			"unit": "m NAP"
+		},
+		{
+			"id": "a_ben",
+			"name": "zomerpeil benedenstrooms",
+			"unit": "m NAP"
+		},
+		{
+			"id": "p_bov",
+			"name": "zomerpeil benedenstrooms",
+			"unit": "m NAP"
+		},
+		{
+			"id": "p_ben",
+			"name": "zomerpeil benedenstrooms",
+			"unit": "m NAP"
+		}
+	]
+}

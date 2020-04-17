@@ -1,162 +1,194 @@
 # -*- coding: utf-8 -*-
 
-import pandas as pd
+#public packages
 import geopandas as gpd
-import pyproj
-from owslib.wfs import WebFeatureService
-import requests
 import json
+import logging
+import numpy as np
+import os
+import pandas as pd
+import pyproj
 
+#project scripts
+import services
+import get_bgt
+import get_ahn
 
+'''
+ToDo:
+    - values uit get_layer slopen en in prepare_modflow zetten
+    - explode naar prepare_modflow
+'''
+
+#%%
 admins = json.loads(open(r'..\config\administrations.json','r').read())
 sources = json.loads(open(r'..\config\sources.json','r').read())
+project_shp = r'..\data\input\project.shp'
+
+admins_shp = r'..\data\input\waterschappen.shp'
+wl_areas_shp = r'..\data\input\peilvakken.shp'
+w_areas_shp = r'..\data\input\watervakken.shp'
+w_lines_shp = r'..\data\input\waterlijnen.shp'
+dem_tif = r'..\data\input\ahn3_05m_dtm.tif'
+
+logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
+
+get_dem = False
 
 #%% 
 def set_crs(gdf, crs=sources['default_crs']):
     if gdf.crs == None: 
         gdf.crs = crs
-    elif not pyproj.Proj(gdf.crs).is_exact_same(pyproj.Proj(crs)):
-        gdf = gdf.to_crs({'init':crs})
-        
-    # stukjes wellicht nodig om het bij pyproj < 2 werkend te krijgen    
-    # else:
-    #     if hasattr(pyproj,'CRS'):
-    #         update_crs = not pyproj.CRS(gdf.crs).equals(pyproj.CRS(crs))
-    #     else:
-    #         update_crs = pyproj.Proj(gdf.crs).srs != pyproj.Proj(init=crs).srs
-    #     if update_crs:
-    #         gdf = gdf.to_crs({'init':crs})
+    else:
+        if hasattr(pyproj,'CRS'):
+            update_crs = not pyproj.CRS(gdf.crs).equals(pyproj.CRS(crs))
+        else:
+            update_crs = pyproj.Proj(gdf.crs).srs != pyproj.Proj(init=crs).srs
+        if update_crs:
+            gdf = gdf.to_crs({'init':crs})
     
     return gdf
 
-class WFS:
+def to_lineString(gdf):
+    '''converts a mixed MultiLineString + LineString polyline gdf to single lines'''
     
-    def __init__(self,url,crs='epsg:28992'):
-        self.wfs = WebFeatureService(url,version='2.0.0', timeout=300)
-        self.layers = list(self.wfs.contents.keys())
-        self.crs = 'epsg:28992'
-        
-    def get_features(self,layer,poly):
-        if layer in self.layers:
-            bbox = poly.bounds
-            response = self.wfs.getfeature(typename=layer, 
-                          bbox=bbox, 
-                          outputFormat='json')
-            geojson = json.loads(response.read())
-            gdf = set_crs(gpd.GeoDataFrame.from_features(geojson['features']))
-            gdf = gdf[gdf.within(poly)]
-            
-            return gdf
-        else:
-            print('{} not in layers({})'.format(layer,self.layers))
-            
-            return None
+    outgdf = gdf[gdf.geometry.type =='LineString']
+    
+    for index,row in gdf[gdf.geometry.type =='MultiLineString'].iterrows():
+        multdf = gpd.GeoDataFrame(columns=gdf.columns)
+        recs = len(row.geometry)
+        multdf = multdf.append([row]*recs,ignore_index=True)
+        for geom in range(recs):
+            multdf.loc[geom,'geometry'] = row.geometry[geom]
+        outgdf = outgdf.append(multdf,ignore_index=True)        
+    
+    return outgdf
 
-class HyDAMO:
-    
-    def __init__(self):
-        self.wfs = WebFeatureService('https://data.nhi.nu/geoserver/ows',version='2.0.0', timeout=300)
-        self.layers = list(self.wfs.contents.keys())
-        self.crs = 'epsg:28992' 
-   
-    def get_features(self,layer,poly):
-        if layer in self.layers:
-            bbox = poly.bounds
-            response = self.wfs.getfeature(typename=layer, 
-                          bbox=bbox, 
-                          outputFormat='json')
-            geojson = json.loads(response.read())
-            gdf = set_crs(gpd.GeoDataFrame.from_features(geojson['features']))
-            gdf = gdf[gdf.within(poly)]
-            
-            return gdf
-        else:
-            print('{} not in layers({})'.format(layer,self.layers))
-            
-            return None
-            
+def explode(gdf):
+    outgdf = gdf[gdf.geometry.type == "Polygon"]
+    for idx, row in gdf[gdf.geometry.type == "MultiPolygon"].iterrows():
+        multdf = gpd.GeoDataFrame(columns=gdf.columns)
+        recs = len(row.geometry)
+        multdf = multdf.append([row]*recs,ignore_index=True)
+        for geom in range(recs):
+            multdf.loc[geom,'geometry'] = row.geometry[geom]
+        outgdf = outgdf.append(multdf,ignore_index=True)
+    return outgdf
 
-class ArcREST:
+def get_layer(src_layer):
+    gdf_list = []
     
-    def __init__(self,url,crs='epsg:28992'):
-        epsg = crs[crs.find(':')+1:]
-        self.maxRecordCount = requests.get('{}?f=pjson'.format(url)).json()['maxRecordCount']
-        self.url = url
-        self.epsg = epsg
-        self.query = '{url}/query?where={min_objects}<=OBJECTID and {max_objects}>OBJECTID&outFields=*&outSR={epsg}&f=geojson'
-        self.crs = crs
+    for index, row in admins_gdf.iterrows():
+        admin = row['name']
+        admin_id = row['id']
+        logging.info('{} {}'.format(src_layer,admin))
         
-    def get_features(self):
+        src = sources[src_layer][admin]
+        poly = row['geometry'].intersection(project_mask)
         
-        url = self.query.format(url=self.url,min_objects=0,max_objects=1000000,epsg=self.epsg)
-        url = '{}&returnIdsOnly=true'.format(url)
-        response = requests.get(url)
-        object_ids = response.json()['properties']['objectIds']
-        object_ids.sort()
+        if src['source'] in list(sources['services'].keys()):
+            src_url = sources['services'][src['source']]
+    
+            if src_url['type'] == 'wfs':
+                url = src_url['url']
+                layer = src['layer']
+                wfs = services.WFS(url)
+                gdf = wfs.get_features(layer,poly)
+                
+            elif src_url['type'] == 'arcrest':
+                url = src_url['url']
+                layer = src['layer']
+                output_format = 'geojson'
+                
+                if 'format' in list(src_url.keys()):
+                    output_format = src_url['format']
+                object_filter = ''
+                if 'filter' in list(src.keys()):
+                    object_filter = src['filter']
+                rest = services.ArcREST(url,output_format=output_format)
+                gdf = rest.get_features(layer,poly,object_filter=object_filter)
+                   
+            else:
+                logging.error("type '{}' not supported".format(src_url['type']))
+                   
+        elif src['source'] in list(sources['files'].keys()):
+            src_path = sources['files'][src['source']]['path']
+            gdf = gpd.read_file(src_path)
+            gdf = set_crs(gdf)
+            gdf = gdf[gdf.intersects(poly)]
         
-        downloads = round(len(object_ids)/self.maxRecordCount + 0.5)
-        gdf_list = []
-        for download in range(downloads):
-            min_objects = download * self.maxRecordCount
-            max_objects = min_objects + self.maxRecordCount
-            url = self.query.format(url=self.url,min_objects=min_objects,max_objects=max_objects,epsg=self.epsg)
-            response = requests.post(url)
-            gdf = gpd.GeoDataFrame.from_features(response.json()['features'])
-            gdf.crs = self.crs
-            gdf_list += [gdf]
-            
-        if len(gdf_list) > 1:
-            gdf = gpd.GeoDataFrame(pd.concat(gdf_list, ignore_index=True))
-            
-        else: gdf = gdf_list[0]
+        elif src['source'] == 'bgt':
+            gdf = get_bgt.to_gdf(poly,layer="waterdeel",
+                                 bronhouders=src['bronhouders'],
+                                 end_registration='now',
+                                 log_level="INFO")
         
-        return(gdf)
+        if 'attributes' in list(src.keys()):  
+            attributes = src['attributes']
+            drop_cols = [col for col in list(gdf.columns) if not col in list(attributes.values()) + ['geometry']]
+            gdf = gdf.drop(drop_cols, axis=1)
+            gdf.rename(columns={value:key for key,value in attributes.items()},
+                       inplace=True)
+        else:
+            drop_cols = [col for col in list(gdf.columns) if col != 'geometry']
+            gdf = gdf.drop(drop_cols, axis=1)
         
+        if 'translations' in list(src.keys()):
+            translations = src['translations']
+            for ident, trans in translations.items():
+                for org, new in trans.items():
+                    gdf[ident][gdf[ident]  == org] = new 
+                    
+        if 'values' in list(src.keys()):
+            values = src['values']
+            for ident, val in values.items():
+                gdf[ident] = val
         
+        gdf.insert(0,'src', src['source'])
+        gdf.insert(0,'admin_id',admin_id)
+        gdf.insert(0,'admin',admin)
+        gdf_list += [gdf]
+    
+    #merge all into one dataframe    
+    gdf = gpd.GeoDataFrame(pd.concat(gdf_list, ignore_index=True))
+    gdf.crs = sources['default_crs']
+    gdf.fillna(value=np.NaN, inplace=True)
+    
+    return gdf
+               
 #%% read admin_boundaries and update settings (later a class)
-admin_src = sources['boundaries']['administrations']
-id_field = admin_src['id_field']
-gdf = gpd.read_file(admin_src['path'])
-gdf = set_crs(gdf)
-{key: value.update({'boundary':gdf.loc[gdf[id_field] == value['id']].geometry.item()}) for key, value in admins.items()}
+logging.info('Dissolving project mask')
+project_gdf = gpd.read_file(project_shp)
+project_gdf['dissolve'] = 0
+project_mask = project_gdf.dissolve(by='dissolve').geometry[0]    
+ 
+#%% create an admins geodataframe, clip by project_mask
+admin_boundaries = admins['boundaries'] 
+admins_gdf = gpd.read_file(admin_boundaries['path'])
+admins_gdf = set_crs(admins_gdf)
+admins_gdf = admins_gdf[admins_gdf.geometry.intersects(project_mask)]
+id_field = admin_boundaries['id_field']
+admins_gdf = admins_gdf[admins_gdf[id_field].isin([value for key, value in admins['administrations'].items()])]
+admins_gdf = admins_gdf.drop([col for col in admins_gdf.columns if not col in [id_field,'geometry']],axis=1)
+admins_gdf.columns = ['id','geometry']
+admins_gdf['name'] = admins_gdf['id'].apply(lambda x: list(admins['administrations'].keys())[list(admins['administrations'].values()).index(x)])
+admins_gdf.to_file(admins_shp)
 
-#%%
-#init water_bodies
-gdf_list = []
+#%% get sources: water-level areas (peilvakken)
+wl_areas_gdf = get_layer('water-level_areas')
+wl_areas_gdf.to_file(wl_areas_shp)
 
-#add admin_id and geometry to water_bodies
-for key, value in admins.items():
-    print('waterlopen {}'.format(key))
-    admin_id = value['id']
-    src = sources['water_lines'][value['water_src']]
-    src_type = src['type']
-    poly = value['boundary']
-          
-    if src_type == 'wfs':
-        url = src['url']
-        layer = src['layer']
-        wfs = WFS(url)
-        gdf = wfs.get_features(layer,poly)
-        
-    elif src_type == 'arcrest':
-        url = src['url']
-        rest = ArcREST(url)
-        gdf = rest.get_features()
-           
-    elif src_type =='file':
-        gdf = set_crs(gpd.read_file(src['path']))
-        
-    else:
-        print("type '{}' not supported".format(src_type))
-    
-    drop_cols = [col for col in list(gdf.columns) if col != 'geometry']
-    gdf = gdf.drop(drop_cols, axis=1)
-    gdf['admin_id'] = admin_id
-    gdf['admin'] = key
-    gdf_list += [gdf]
+#%% get sources: water areas (watervakken)
+w_areas_gdf = get_layer('water_areas')
+w_areas_gdf = w_areas_gdf.explode()
+w_areas_gdf.to_file(w_areas_shp)
 
-#merge all into one dataframe    
-gdf = gpd.GeoDataFrame(pd.concat(gdf_list, ignore_index=True))
-gdf.crs = sources['default_crs']
+#%% get sources: water areas (watervakken)
+w_lines_gdf = get_layer('water_lines')
+w_lines_gdf = w_lines_gdf.explode()
+#w_lines_gdf = to_lineString(w_lines_gdf)
+w_lines_gdf.to_file(w_lines_shp)
 
-gdf.to_file('..\data\waterlopen.shp')   
+#%% get sources: water areas (ahn)
+if get_dem:
+    get_ahn.to_tif(project_mask,dem_tif)

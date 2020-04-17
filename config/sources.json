@@ -1,38 +1,212 @@
 {
 	"default_crs": "epsg:28992",
-	"boundaries": {
-		"administrations": {
-			"type": "file",
-			"path": "..\\data\\sources\\Waterschapsgrenzen_4258.gml",
-			"id_field": "wbh_code_objectidentificatie"
+	"services": {
+		"hydamo": {
+			"url": "https://data.nhi.nu/geoserver/ows",
+			"type": "wfs"
+		},
+		"rijnland_peilvakken": {
+			"url": "https://rijnland.enl-mcs.nl/arcgis/rest/services/Polder_en_peilgebied/Peilvak_vigerend_besluit/MapServer",
+			"type": "arcrest",
+			"format": "json"
+		},
+		"rijnland_legger": {
+			"url": "https://rijnland.enl-mcs.nl/arcgis/rest/services/Leggers/Legger_Oppervlaktewater_Vigerend/MapServer",
+			"type": "arcrest",
+			"format": "json"
+		},
+		"hdsr_hydro-object": {
+			"url": "https://services1.arcgis.com/1lWKHMyUIR3eKHKD/ArcGIS/rest/services/HydroObjecten/FeatureServer",
+			"type": "arcrest"
+		},
+		"hdsr_legger2012": {
+			"url": "https://services1.arcgis.com/1lWKHMyUIR3eKHKD/ArcGIS/rest/services/Legger_Oppervlaktewater_2012/FeatureServer",
+			"type": "arcrest"
+		},
+		"hdsr_peilvakken": {
+			"url": "https://services1.arcgis.com/1lWKHMyUIR3eKHKD/ArcGIS/rest/services/Peilgebieden/FeatureServer",
+			"type": "arcrest"
+		},
+		"hsk_legger": {
+			"url": "https://services.arcgis.com/OnnVX2wGkBfflKqu/ArcGIS/rest/services/HHSK_Legger_Watersysteem/FeatureServer",
+			"type": "arcrest"
+		},
+		"v&v_legger": {
+			"url": "https://services1.arcgis.com/ug8NBKcLHVNmdmdt/ArcGIS/rest/services/Legger_Watersysteem/FeatureServer",
+			"type": "arcrest"
+		},
+		"waternet_legger": {
+			"url": "https://maps.waternet.nl/arcgis/rest/services/AGV_Legger/AGV_Legger_GEONIS/MapServer",
+			"type": "arcrest"
+		},
+		"rivierenland_legger": {
+			"url": "https://kaarten.wsrl.nl/arcgis/rest/services/Kaarten/Legger_Watersysteem/MapServer",
+			"type": "arcrest"
+		},
+		"h&a_legger": {
+			"url": "https://opendata.hunzeenaas.nl/geoserver/ows",
+			"type": "arcrest"
+		}
+	},
+	"files": {
+		"hsk_peilvakken": {
+			"path": "..\\data\\sources\\HSK\\PeilgebiedenlaagHHSK_20200409.shp"
+		}
+	},
+	"water_areas": {
+		"Rijnland": {
+			"source": "rijnland_legger",
+			"layer": 2,
+			"attributes": {
+				"src_id": "CODE",
+				"BB": "BODEMBREEDTE",
+				"WD": "WATERDIEPTE",
+				"THL": "TALUDHELLINGLINKS",
+				"THR": "TALUDHELLINGRECHTS",
+				"CAT": "CATEGORIEOPPWATERLICHAAM"
+			},
+			"translations": {
+				"CAT": {
+					"primair": 1,
+					"overig": 3
+				}
+			}
+		},
+		"HSK": {
+			"source": "bgt",
+			"layer": "waterdeel",
+			"bronhouders": [
+				"W0656"
+			],
+			"attributes": {
+				"src_id": "gml_id"
+			}
+		},
+		"HDSR": {
+			"source": "bgt",
+			"layer": "waterdeel",
+			"bronhouders": [
+				"L0002",
+				"W0636"
+			],
+			"attributes": {
+				"src_id": "gml_id"
+			}
 		}
 	},
 	"water_lines": {
-		"rijnland_waterlopen": {
-			"type": "file",
-			"path": "..\\data\\sources\\rijnland\\watergangen\\Watergang_as.shp"
+		"Rijnland": {
+			"source": "rijnland_legger",
+			"layer": 1,
+			"attributes": {
+				"src_id": "CODE"
+			}
 		},
-		"v&v_waterlopen": {
-			"type": "arcrest",
-			"url": "https://services1.arcgis.com/ug8NBKcLHVNmdmdt/ArcGIS/rest/services/Legger_Watersysteem/FeatureServer/14"
+		"HSK": {
+			"source": "hsk_legger",
+			"layer": 11,
+			"attributes": {
+				"src_id": "CODE",
+				"WB": "WATERBREEDTE",
+				"WD": "DIEPTE",
+				"THL": "TALUDLINKS",
+				"THR": "TALUDRECHTS"
+			},
+			"values": {
+				"CAT": 1
+			}
 		},
-		"waternet_waterlopen": {
-			"type": "file",
-			"path": "..\\data\\sources\\Waternet\\Gegevenslevering_Waternet\\Oppervlaktewater_lijn.shp"
+		"HDSR": {
+			"source": "hdsr_hydro-object",
+			"layer": 0,
+			"attributes": {
+				"src_id": "CODE",
+				"BB": "IWS_W_BODBR",
+				"BL": "IWS_W_BODHO",
+				"CAT": "CATEGORIEOPPWATERLICHAAM"
+			}
+		}
+	},
+	"water-level_areas": {
+		"Rijnland": {
+			"source": "rijnland_peilvakken",
+			"layer": 0,
+			"attributes": {
+				"src_id": "CODE",
+				"ZP": "ZOMERPEIL",
+				"ZFPO": "FLEXZOMERPEILONDERGRENS",
+				"ZFPB": "FLEXZOMERPEILBOVENGRENS",
+				"WP": "WINTERPEIL",
+				"WFPO": "FLEXWINTERPEILONDERGRENS",
+				"WFPB": "FLEXWINTERPEILBOVENGRENS",
+				"VP": "VASTPEIL"
+			}
 		},
-		"hydamo_waterlopen": {
-			"type": "wfs",
-			"url": "https://data.nhi.nu/geoserver/ows",
-			"layer": "oppervlaktewater_1:hydroobject"
+		"HSK": {
+			"source": "hsk_peilvakken",
+			"attributes": {
+				"src_id": "GPGIDENT",
+				"VP": "IWS_GPGVAS",
+				"FPB": "IWS_GPGBOV",
+				"FPO": "IWS_GPGOND"
+			}
 		},
-		"h&a_waterlopen": {
-			"type": "wfs",
-			"url": "https://opendata.hunzeenaas.nl/geoserver/ows",
-			"layer": "OpenData:Hoofdwatergang"
+		"HDSR": {
+			"source": "hdsr_peilvakken",
+			"layer": 0,
+			"attributes": {
+				"src_id": "CODE",
+				"ZP": "ZOMERPEIL",
+				"WP": "WINTERPEIL",
+				"VP": "VASTPEIL",
+				"FPO": "ONDERPEIL",
+				"FPB": "BOVENPEIL"
+			}
+		}
+	},
+	"elevation": {
+		"ahn_dtm": {
+			"type": "raster-file",
+			"path": "..\\data\\sources\\ahn3_05m_dtm.tif"
 		},
-		"schieland_waterlopen": {
-			"type": "arcrest",
-			"url": "https://services.arcgis.com/OnnVX2wGkBfflKqu/ArcGIS/rest/services/HHSK_Legger_Watersysteem/FeatureServer/11"
+		"bathymetrie": {
+			"type": "raster-file",
+			"path": "..\\data\\sources\\MN_zuid_NAP.tif"
+		}
+	},
+	"overig": {
+		"rijnland_primaire_waterlopen": {
+			"service": "rijnland_legger",
+			"layer": 1,
+			"filter": "CATEGORIEOPPWATERLICHAAM = 'primair'"
+		},
+		"rijnland_overige_waterlopen": {
+			"service": "rijnland_legger",
+			"layer": 1,
+			"filter": "CATEGORIEOPPWATERLICHAAM = 'overig'"
+		},
+		"rijnland_watervlakken": {
+			"service": "rijnland_legger",
+			"layer": 2,
+			"filter": "BODEMBREEDTE > 25"
+		},
+		"hsk_primaire_waterlopen": {
+			"service": "hsk_legger",
+			"layer": 11
+		},
+		"hsk_overige_waterlopen": {
+			"service": "hsk_legger",
+			"layer": 12
+		},
+		"hdsr_primaire_waterlopen": {
+			"service": "hdsr_hydro-object",
+			"layer": 0,
+			"filter": "CATEGORIEOPPWATERLICHAAM = 1"
+		},
+		"hdsr_overige_waterlopen": {
+			"service": "hdsr_hydro-object",
+			"layer": 0,
+			"filter": "CATEGORIEOPPWATERLICHAAM > 1"
 		}
 	}
 }
