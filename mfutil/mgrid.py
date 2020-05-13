@@ -446,8 +446,8 @@ def resample_dataarray_to_structured_grid(da_in, extent=None, delr=None, delc=No
             arr_out[i] = f(xmid, ymid)[::-1]
         else:
             xydata = np.vstack([v.ravel() for v in
-                                np.meshgrid(ds_lay.x.data, ds_lay.y.data)])
-            xyi = np.vstack([v.ravel() for v in np.meshgrid(xmid, ymid)])
+                                np.meshgrid(ds_lay.x.data, ds_lay.y.data)]).T
+            xyi = np.vstack([v.ravel() for v in np.meshgrid(xmid, ymid)]).T
             fi = griddata(xydata, ds_lay.data.ravel(), xyi, method=kind)
             arr_out[i] = fi.reshape(ymid.shape[0], xmid.shape[0])
 
