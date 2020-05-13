@@ -12,21 +12,22 @@ sys.path.insert(1, "/home/david/Github/flopy_db")
 import flopy as fp
 
 # import custom module
-sys.path.insert(1, "../mfutil")
+sys.path.insert(1, "../../mfutil")
 import mtime
 import mgrid
 import subsurface
+import util
 
 start = default_timer()
 
 # %% Model settings
 
 use_cache = True
-model_ws = r'../model/test002'
+model_ws = r'../../model/test002'
 model_name = 'test002'
 
 # geef hier paths op
-datadir = r'../data'
+datadir = r'../../data'
 figdir = os.path.join(model_ws, 'figure')
 cachedir = os.path.join(model_ws, 'cache')
 
@@ -47,16 +48,16 @@ nstp = 1
 tsmult = 1.0
 
 # steady-state/transient
-steady_state = True  # steady state flag
+steady_state = False  # steady state flag
 start_time = '2020-01-01'  # start time
 
 # no. of transient time steps (only if steady is False)
-transient_timesteps = 1
+transient_timesteps = 24
 steady_start = True  # if True start transient model with steady timestep
-perlen = 1  # length of timestep in time_units (see below)
+perlen = 30  # length of timestep in time_units (see below)
 
 # %% time discretization
-model_ts = mtime.get_model_ts(start_time=start_time,
+model_ds = mtime.get_model_ts(start_time=start_time,
                               steady_state=steady_state,
                               steady_start=steady_start,
                               time_units=time_units,
@@ -65,8 +66,8 @@ model_ts = mtime.get_model_ts(start_time=start_time,
                               nstp=nstp,
                               tsmult=tsmult)
 
-tdis_perioddata = [(model_ts.perlen, model_ts.nstp,
-                    model_ts.tsmult)] * model_ts.nper
+tdis_perioddata = [(model_ds.perlen, model_ds.nstp,
+                    model_ds.tsmult)] * model_ds.nper
 
 # %% SIM
 # Create the Flopy simulation object
@@ -78,9 +79,9 @@ sim = fp.mf6.MFSimulation(sim_name=model_name,
 # %% TDIS
 tdis = fp.mf6.ModflowTdis(sim,
                           pname='tdis',
-                          time_units=model_ts.time_units,
-                          nper=model_ts.nper,
-                          start_date_time=model_ts.start_time,
+                          time_units=model_ds.time_units,
+                          nper=model_ds.nper,
+                          start_date_time=model_ds.start_time,
                           perioddata=tdis_perioddata)
 
 # %% GWF
@@ -120,18 +121,20 @@ nlay, lay_sel = mgrid.get_number_of_layers_from_regis(regis_ds_raw)
 regis_ds_raw = regis_ds_raw.sel(layer=lay_sel)
 
 # convert regis dataset to grid
-regis_ds = mgrid.get_regis_dataset(gridtype='structured',
-                                   regis_ds_raw=regis_ds_raw,
-                                   extent=extent,
-                                   delr=delr,
-                                   delc=delc,
-                                   interp_method="nearest",
-                                   cachedir=cachedir,
-                                   fname_netcdf='regis_ugw_test.nc',
-                                   use_cache=use_cache)
+regis_ds = util.get_regis_dataset(gridtype='structured',
+                                  regis_ds_raw=regis_ds_raw,
+                                  extent=extent,
+                                  delr=delr,
+                                  delc=delc,
+                                  interp_method="nearest",
+                                  cachedir=cachedir,
+                                  fname_netcdf='regis_ugw_test.nc',
+                                  use_cache=use_cache)
 
 # %% get model_ds, add idomain, top & bot
-model_ds = mgrid.get_model_ds_from_regis_ds(regis_ds)
+model_ds = mgrid.update_model_ds_from_regis_ds(model_ds, regis_ds,
+                                               keep_vars=['x', 'y'],
+                                               verbose=True)
 model_ds = mgrid.add_idomain_from_bottom_to_dataset(regis_ds['bottom'],
                                                     model_ds)
 model_ds = subsurface.add_top_bot_to_model_ds(regis_ds,
@@ -184,7 +187,6 @@ dis = fp.mf6.ModflowGwfdis(gwf,
                            filename='{}.dis'.format(model_name))
 
 # %% NPF
-
 npf = fp.mf6.ModflowGwfnpf(gwf,
                            pname='npf',
                            icelltype=icelltype,
@@ -193,8 +195,29 @@ npf = fp.mf6.ModflowGwfnpf(gwf,
                            save_flows=True,
                            save_specific_discharge=True)
 
-# %% IC
+# %% STO
+sy = 0.2
+ss = 1e-5
 
+if not model_ds.steady_state:
+
+    if model_ds.steady_start:
+        sts_spd = {0: True}
+        trn_spd = {1: True}
+    else:
+        sts_spd = None
+        trn_spd = {0: True}
+
+    sto = fp.mf6.ModflowGwfsto(gwf,
+                               pname='sto',
+                               save_flows=True,
+                               iconvert=1,
+                               ss=ss,
+                               sy=sy,
+                               steady_state=sts_spd,
+                               transient=trn_spd)
+
+# %% IC
 starting_head = 1.0
 
 # Create the initial conditions array
@@ -213,22 +236,26 @@ ic = fp.mf6.ModflowGwfic(gwf,
                          strt=starting_head)
 
 # %% RCH
-
 rech = 1e-3  # m/day
 
 rch = fp.mf6.ModflowGwfrcha(gwf,
                             pname="rch",
                             recharge=rech)
 
-
 # %% RIV
 
 # read shapefile
-water_shp = "../data/modflow_sfw/waterareas.shp"
+water_shp = os.path.join(datadir, "modflow_sfw", "waterareas.shp")
 sfw = gpd.read_file(water_shp)
 
-# %% intersection
-# build intersection object
+# check implausible rbots
+mask = (sfw["BL"] > sfw[["ZP", "WP"]].min(axis=1))
+if mask.sum() > 0:
+    print(f"Warning! RBOT above waterlevel in {mask.sum()} cases!")
+    print("... setting RBOT 1 m below lowest water level")
+    sfw.loc[mask, "BL"] = (sfw.loc[mask, ["ZP", "WP"]].min() - 1.0).values
+
+# intersection
 ix = fp.utils.GridIntersect(gwf.modelgrid, method="vertex", rtree="strtree")
 
 # intersect with modelgrid and store attributes
@@ -253,13 +280,20 @@ sfw_grid = sfw_grid.reset_index(drop=True).astype({"BL": np.float,
 
 # Post process intersection result
 gr = sfw_grid.groupby(by="cellids")
-calc_cols = ["ZP", "WP", "BL"]
+calc_cols = ["ZP", "WP"]
 mdata = pd.DataFrame(index=gr.groups.keys())
 for igr, group in tqdm(gr):
     idf = group
     for icol in calc_cols:
         # area-weighted
         mdata.loc[igr, icol] = (idf.area * idf[icol]).sum() / idf.area.sum()
+
+    # lowest rbot
+    lowest_rbot = idf["BL"].min()
+    lowest_lvl = mdata.loc[igr, calc_cols].min()
+    if lowest_rbot >= lowest_lvl:
+        lowest_rbot = lowest_lvl - 0.5
+    mdata.loc[igr, "BL"] = lowest_rbot
 
     # estimate length from polygon
     mdata.loc[igr, "len_estimate"] = (
@@ -268,19 +302,36 @@ for igr, group in tqdm(gr):
     # area
     mdata.loc[igr, "area"] = idf.area.sum()
 
+    # wla of largest surface water feature
+    mdata.loc[igr, "name_largest"] = idf.loc[idf.area.idxmax(), "src_id_wla"]
+
 spd = []
 cbot = 1.0  # bottom resistance, days
 
 for cellid, row in mdata.iterrows():
-    cid = (0,) + cellid
+    
+    rbot = row["BL"]
+    laytop = model_ds.top.isel(x=cellid[1], y=cellid[0])
+    laybot = model_ds.bot.isel(x=cellid[1], y=cellid[0])
+
+    layers = []
+    if laytop.data < rbot:
+        layers = [0]  # weirdness, rbot above top of model
+    else:
+        layers = [0]
+    if (laybot.data > rbot).sum() > 0:
+        layers += list(range(1, (laybot.data > rbot).sum()+1))
+    
     if steady_state:
         stage = row[["ZP", "WP"]].mean()  # mean level summer/winter
     else:
-        stage = ""
+        stage = row["name_largest"]
     cond = row["area"] / cbot
-    rbot = row["BL"] if row["BL"] < stage else stage - 1.0
+    # rbot = row["BL"] if row["BL"] < stage else stage - 1.0
 
-    spd.append([cid, stage, cond, rbot])
+    for nlay in layers:
+        cid = (nlay,) + cellid
+        spd.append([cid, stage, cond, rbot])
 
 riv = fp.mf6.ModflowGwfriv(gwf,
                            stress_period_data=spd,
@@ -289,7 +340,7 @@ riv = fp.mf6.ModflowGwfriv(gwf,
 
 # model period
 mstart = pd.Timestamp(start_time)
-mend = model_ts.time.isel(time=-1).to_pandas()
+mend = model_ds.time.isel(time=-1).to_pandas()
 
 if not steady_state:
     tseries_list = []
@@ -304,9 +355,9 @@ if not steady_state:
         dt_apr_oct.insert(0, dt_apr_oct[0] - doffset)
         dt_apr_oct.append(dt_apr_oct[-1] + doffset)
         dt = pd.DatetimeIndex(dt_apr_oct)
-        dtnum = (dt - mstart).days
+        dtnum = ((dt - mstart).days).to_numpy()
+        dtnum[dtnum < 0] = 0.0
         ts = pd.Series(index=dtnum, dtype=float)
-
         ts.where(dt.month == 4, peilen.ZP, inplace=True)
         ts.where(dt.month == 10, peilen.WP, inplace=True)
         ts.name = peilvak

@@ -253,8 +253,14 @@ rch = fp.mf6.ModflowGwfrcha(gwf,
 water_shp = os.path.join(datadir, "modflow_sfw", "waterareas.shp")
 sfw = gpd.read_file(water_shp)
 
-# %% intersection
-# build intersection object
+# check implausible rbots
+mask = (sfw["BL"] > sfw[["ZP", "WP"]].min(axis=1))
+if mask.sum() > 0:
+    print(f"Warning! RBOT above waterlevel in {mask.sum()} cases!")
+    print("... setting RBOT 1 m below lowest water level")
+    sfw.loc[mask, "BL"] = sfw.loc[mask, ["ZP", "WP"]].min() - 1.0
+
+# intersection
 ix = fp.utils.GridIntersect(gwf.modelgrid, method="vertex", rtree="strtree")
 
 # intersect with modelgrid and store attributes
