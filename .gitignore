@@ -129,6 +129,9 @@ dmypy.json
 .pyre/
 
 data/*
+gis
+model
+.vscode
 
 !data/.gitkeep
 !data/input/.gitkeep
