@@ -12,10 +12,11 @@ sys.path.insert(1, "/home/david/Github/flopy_db")
 import flopy as fp
 
 # import custom module
-sys.path.insert(1, "../mfutil")
+sys.path.insert(1, "../../mfutil")
 import mtime
 import mgrid
 import subsurface
+import util
 
 
 start = default_timer()
@@ -23,11 +24,11 @@ start = default_timer()
 # %% Model settings
 
 use_cache = True
-model_ws = r'../model/test001'
+model_ws = r'../../model/test001'
 model_name = 'test001'
 
 # geef hier paths op
-datadir = r'../data'
+datadir = r'../../data'
 figdir = os.path.join(model_ws, 'figure')
 cachedir = os.path.join(model_ws, 'cache')
 
@@ -57,7 +58,7 @@ steady_start = False  # if True start transient model with steady timestep
 perlen = 30  # length of timestep in time_units (see below)
 
 # %% time discretization
-model_ts = mtime.get_model_ts(start_time=start_time,
+model_ds = mtime.get_model_ts(start_time=start_time,
                               steady_state=steady_state,
                               steady_start=steady_start,
                               time_units=time_units,
@@ -66,8 +67,8 @@ model_ts = mtime.get_model_ts(start_time=start_time,
                               nstp=nstp,
                               tsmult=tsmult)
 
-tdis_perioddata = [(model_ts.perlen, model_ts.nstp,
-                    model_ts.tsmult)] * model_ts.nper
+tdis_perioddata = [(model_ds.perlen, model_ds.nstp,
+                    model_ds.tsmult)] * model_ds.nper
 
 # %% SIM
 # Create the Flopy simulation object
@@ -79,9 +80,9 @@ sim = fp.mf6.MFSimulation(sim_name=model_name,
 # %% TDIS
 tdis = fp.mf6.ModflowTdis(sim,
                           pname='tdis',
-                          time_units=model_ts.time_units,
-                          nper=model_ts.nper,
-                          start_date_time=model_ts.start_time,
+                          time_units=model_ds.time_units,
+                          nper=model_ds.nper,
+                          start_date_time=model_ds.start_time,
                           perioddata=tdis_perioddata)
 
 # %% GWF
@@ -120,18 +121,20 @@ nlay, lay_sel = mgrid.get_number_of_layers_from_regis(regis_ds_raw)
 regis_ds_raw = regis_ds_raw.sel(layer=lay_sel)
 
 # convert regis dataset to grid
-regis_ds = mgrid.get_regis_dataset(gridtype='structured',
-                                   regis_ds_raw=regis_ds_raw,
-                                   extent=extent,
-                                   delr=delr,
-                                   delc=delc,
-                                   interp_method="nearest",
-                                   cachedir=cachedir,
-                                   fname_netcdf='regis_ugw_test.nc',
-                                   use_cache=use_cache)
+regis_ds = util.get_regis_dataset(gridtype='structured',
+                                  regis_ds_raw=regis_ds_raw,
+                                  extent=extent,
+                                  delr=delr,
+                                  delc=delc,
+                                  interp_method="nearest",
+                                  cachedir=cachedir,
+                                  fname_netcdf='regis_ugw_test.nc',
+                                  use_cache=use_cache)
 
 # %% get model_ds, add idomain, top & bot
-model_ds = mgrid.get_model_ds_from_regis_ds(regis_ds)
+model_ds = mgrid.update_model_ds_from_regis_ds(model_ds, regis_ds,
+                                               keep_vars=['x', 'y'],
+                                               verbose=True)
 model_ds = mgrid.add_idomain_from_bottom_to_dataset(regis_ds['bottom'],
                                                     model_ds)
 model_ds = subsurface.add_top_bot_to_model_ds(regis_ds,
@@ -198,9 +201,9 @@ npf = fp.mf6.ModflowGwfnpf(gwf,
 sy = 0.2
 ss = 1e-5
 
-if not model_ts.steady_state:
+if not model_ds.steady_state:
 
-    if model_ts.steady_start:
+    if model_ds.steady_start:
         sts_spd = {0: True}
         trn_spd = {1: True}
     else:
@@ -247,7 +250,7 @@ rch = fp.mf6.ModflowGwfrcha(gwf,
 # %% RIV
 
 # read shapefile
-water_shp = "../data/modflow_sfw/waterareas.shp"
+water_shp = os.path.join(datadir, "modflow_sfw", "waterareas.shp")
 sfw = gpd.read_file(water_shp)
 
 # %% intersection
@@ -309,7 +312,7 @@ riv.obs.initialize(filename=f'{model_name}.riv.obs',
 
 # model period
 mstart = pd.Timestamp(start_time)
-mend = model_ts.time.isel(time=-1).to_pandas()
+mend = model_ds.time.isel(time=-1).to_pandas()
 
 if not steady_state:
     tseries_list = []
@@ -324,7 +327,7 @@ if not steady_state:
         dt_apr_oct.insert(0, dt_apr_oct[0] - doffset)
         dt_apr_oct.append(dt_apr_oct[-1] + doffset)
         dt = pd.DatetimeIndex(dt_apr_oct)
-        dtnum = (dt - mstart).days
+        dtnum = ((dt - mstart).days).to_numpy()
         dtnum[dtnum < 0] = 0.0
         ts = pd.Series(index=dtnum, dtype=float)
 
