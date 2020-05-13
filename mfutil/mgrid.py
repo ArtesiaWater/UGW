@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Apr  2 13:41:57 2020
+
+@author: oebbe
+"""
 import copy
 import os
 import pickle
@@ -7,12 +13,44 @@ import numpy as np
 import xarray as xr
 from scipy import interpolate
 from scipy.interpolate import griddata
+from shapely.prepared import prep
 
 import flopy
+import util
 from flopy.utils.gridintersect import GridIntersect
 
 
-def get_model_ds_from_regis_ds(regis_ds, keep_vars=None):
+def update_model_ds_from_regis_ds(model_ds, regis_ds, keep_vars=None, verbose=False):
+    """ Update a model dataset with a regis dataset.
+
+
+    Parameters
+    ----------
+    model_ds : xarray.Dataset
+        dataset with model data, preferably without a grid definition.
+    regis_ds : xarray.Dataset
+        dataset with regis data corresponding to the modelgrid
+
+    Returns
+    -------
+    model_ds : xarray.Dataset
+        dataset with model data 
+    """
+
+    if keep_vars is None:
+        raise ValueError(
+            'please select variables that will be used to update model_ds')
+    else:
+        # update variables
+        model_ds.update(regis_ds[keep_vars])
+        # update attributes
+        _ = [model_ds.attrs.update({key: item})
+             for key, item in regis_ds.attrs.items()]
+
+    return model_ds
+
+
+def get_model_ds_from_regis_ds(regis_ds, keep_vars=None, verbose=False):
     """ Get a model dataset with the same coordinates and dimensions as the
     input regis dataset.
 
@@ -40,7 +78,7 @@ def get_model_ds_from_regis_ds(regis_ds, keep_vars=None):
     return model_ds
 
 
-def get_first_active_layer_from_idomain(idomain, nodata=-999):
+def get_first_active_layer_from_idomain(idomain, nodata=-999, verbose=False):
     """ get the first active layer in each cell from the idomain
 
     Parameters
@@ -57,6 +95,8 @@ def get_first_active_layer_from_idomain(idomain, nodata=-999):
         raster in which each cell has the zero based number of the first
         active layer. Shape can be (y, x) or (cid)
     """
+    if verbose:
+        print('get first active modellayer for each cell in idomain')
 
     first_active_layer = xr.where(idomain[0] == 1, 0, nodata)
     for i in range(1, idomain.shape[0]):
@@ -67,15 +107,16 @@ def get_first_active_layer_from_idomain(idomain, nodata=-999):
     return first_active_layer
 
 
-def add_idomain_from_bottom_to_dataset(bottom, model_ds, nodata=-999):
+def add_idomain_from_bottom_to_dataset(bottom, model_ds, nodata=-999,
+                                       verbose=False):
     """ add idomain and first_active_layer to model_ds
     The active layers are defined as the layers where the bottom is not nan
 
     Parameters
     ----------
-    regis_ds : xarray.Dataset
-        dataset with regis data where bottom nan values indicate inactive 
-        cells.
+    bottom : xarray.DataArray
+        DataArray with bottom values of each layer. Nan values indicate 
+        inactive cells.
     model_ds : xarray.Dataset
         dataset with model data where idomain and first_active_layer
         are added to.
@@ -88,6 +129,9 @@ def add_idomain_from_bottom_to_dataset(bottom, model_ds, nodata=-999):
     model_ds : xarray.Dataset
         dataset with model data including idomain and first_active_layer
     """
+    if verbose:
+        print('get active cells (idomain) from bottom DataArray')
+
     idomain = xr.where(bottom.isnull(), -1, 1)
 
     # if the top cell is inactive idomain is 0, otherwise it is -1
@@ -98,7 +142,8 @@ def add_idomain_from_bottom_to_dataset(bottom, model_ds, nodata=-999):
 
     model_ds['idomain'] = idomain
     model_ds['first_active_layer'] = get_first_active_layer_from_idomain(idomain,
-                                                                         nodata=nodata)
+                                                                         nodata=nodata,
+                                                                         verbose=verbose)
 
     model_ds.attrs['nodata'] = nodata
 
@@ -189,7 +234,8 @@ def fit_extent_to_regis(extent, delr, delc, cs_regis=100.,
     extent[3] = extent[2] + (nrow * delc)  # round y1 up to close grid
 
     if verbose:
-        print(f'new extent is {extent} and has {nrow} rows and {ncol} columns')
+        print(
+            f'new extent is {extent} model has {nrow} rows and {ncol} columns')
 
     return extent, nrow, ncol
 
@@ -295,7 +341,7 @@ def fillnan_dataarray_unstructured_grid(xar_in, gridprops=None,
 
     # get list of coordinates from all points in raster
     if (xyi is None) or (cid is None):
-        xyi, cid = mgrid.get_xyi_cid(gridprops)
+        xyi, cid = get_xyi_cid(gridprops)
 
     # fill nan values in bathymetry
     values_all = xar_in.data
@@ -316,8 +362,7 @@ def fillnan_dataarray_unstructured_grid(xar_in, gridprops=None,
     return xar_out
 
 
-def resample_dataarray_to_structured_grid(da_in, extent=None,
-                                          delr=None, delc=None,
+def resample_dataarray_to_structured_grid(da_in, extent=None, delr=None, delc=None,
                                           xmid=None, ymid=None,
                                           kind='linear', nan_factor=0.01):
     """ resample a dataarray (xarray) from a structured grid to a new dataaraay 
@@ -378,11 +423,9 @@ def resample_dataarray_to_structured_grid(da_in, extent=None,
 
     layers = da_in.layer.data
     arr_out = np.zeros((len(layers), len(ymid), len(xmid)))
-
     for i, lay in enumerate(layers):
 
         ds_lay = da_in.sel(layer=lay)
-
         # check for nan values
         if (ds_lay.isnull().sum() > 0) and (kind != "nearest"):
             # best way to fill nan values
@@ -403,7 +446,7 @@ def resample_dataarray_to_structured_grid(da_in, extent=None,
             arr_out[i] = f(xmid, ymid)[::-1]
         else:
             xydata = np.vstack([v.ravel() for v in
-                         np.meshgrid(ds_lay.x.data, ds_lay.y.data)])
+                                np.meshgrid(ds_lay.x.data, ds_lay.y.data)])
             xyi = np.vstack([v.ravel() for v in np.meshgrid(xmid, ymid)])
             fi = griddata(xydata, ds_lay.data.ravel(), xyi, method=kind)
             arr_out[i] = fi.reshape(ymid.shape[0], xmid.shape[0])
@@ -466,9 +509,11 @@ def resample_dataset_to_structured_grid(ds_in, extent, delr, delc,
 
 def create_unstructured_grid(gridgen_ws, model_name, gwf,
                              shp_fname, level, extent,
-                             nlay, nrow, ncol, delr,
-                             delc, exe_name="../tools/gridgen.exe",
-                             cachedir=None, use_cache=False,
+                             nlay, nrow, ncol, 
+                             delr, delc, 
+                             exe_name="../tools/gridgen.exe",
+                             cachedir=None,
+                             use_cache=False,
                              verbose=False):
     """ created unstructured grid. Refine grid using a shapefile and
     refinement levels.     
@@ -584,7 +629,7 @@ def get_xyi_cid(gridprops):
 def resample_dataarray_to_unstructured_grid(da_in, gridprops=None,
                                             xyi=None, cid=None,
                                             method='nearest'):
-    """ resample a dataarray (xarray) from a structured grid to a new dataaraay 
+    """resample a dataarray (xarray) from a structured grid to a new dataaraay 
     of an unstructured grid.
 
     Parameters
@@ -617,9 +662,6 @@ def resample_dataarray_to_unstructured_grid(da_in, gridprops=None,
     """
     if (xyi is None) or (cid is None):
         xyi, cid = get_xyi_cid(gridprops)
-
-    if method != 'nearest':
-        raise NotImplementedError()
 
     # get x and y values of all cells in dataarray
     mg = np.meshgrid(da_in.x.data, da_in.y.data)
@@ -1161,14 +1203,14 @@ def polygon_to_area(modelgrid, polygon, da,
             area = opp_row[-2]
             area_array[opp_row[0][0], opp_row[0][1]] = area
     elif gridtype == 'unstructured':
-        cids = [opp_row[0] for opp_row in opp_cells]
-        area = [opp_row[-2] for opp_row in opp_cells]
-        area_array[cids] = area
+        cids = opp_cells.cellids
+        area = opp_cells.areas
+        area_array[cids.astype(int)] = area
 
     return area_array
 
 
-def gdf_to_bool_data_array(gdf, mfgrid, model_ds, gridtype='structured'):
+def gdf_to_bool_data_array(gdf, mfgrid, model_ds):
     """ convert a GeoDataFrame with polygon geometries into a data array
     corresponding to the modelgrid in which each cell is 1 (True) if one or
     more geometries are (partly) in that cell.
@@ -1177,7 +1219,7 @@ def gdf_to_bool_data_array(gdf, mfgrid, model_ds, gridtype='structured'):
     ----------
     gdf : geopandas.GeoDataFrame
         polygon shapes with surface water.
-    modelgrid : flopy grid
+    mfgrid : flopy grid
         model grid.
     model_ds : xr.DataSet
         xarray with model data
@@ -1189,14 +1231,57 @@ def gdf_to_bool_data_array(gdf, mfgrid, model_ds, gridtype='structured'):
         model_ds and mfgrid.
 
     """
+
+    # build list of gridcells
+    ix = GridIntersect(mfgrid, method="strtree")
+
+    # prepare shape for efficient batch intersection check
+    prepshp = prep(gdf.geometry.iloc[0])
+
+    # get only gridcells that intersect
+    filtered = filter(prepshp.intersects, ix.gridshapes)
+
+    # cell ids for intersecting cells
+    cids = [c.name for c in filtered]
+
     da = xr.zeros_like(model_ds['top'])
-    for i, row in gdf.iterrows():
-        area_pol = mgrid.polygon_to_area(mfgrid, row['geometry'],
-                                         xr.zeros_like(model_ds['top']),
-                                         gridtype)
-        da = xr.where(area_pol > da, 1, da)
+    if model_ds.gridtype == 'structured':
+        for cid in cids:
+            da[cid[0], cid[1]] = 1
+    elif model_ds.gridtype == 'unstructured':
+        da[cids] = 1
+    else:
+        raise ValueError(
+            'function only support structured or unstructured gridtypes')
 
     return da
+
+
+def gdf_to_bool_dataset(model_ds, gdf, mfgrid, da_name):
+    """ convert a GeoDataFrame with polygon geometries into a model dataset
+    with a data_array named 'da_name' in which each cell is 1 (True) if one or
+    more geometries are (partly) in that cell.
+
+    Parameters
+    ----------
+    gdf : geopandas.GeoDataFrame
+        polygon shapes with surface water.
+    mfgrid : flopy grid
+        model grid.
+    model_ds : xr.DataSet
+        xarray with model data
+
+    Returns
+    -------
+    da : xr.DataArray
+        1 if polygon is in cell, 0 otherwise. Grid dimensions according to
+        model_ds and mfgrid.
+
+    """
+    model_ds_out = util.get_model_ds_empty(model_ds)
+    model_ds_out[da_name] = gdf_to_bool_data_array(gdf, mfgrid, model_ds)
+
+    return model_ds_out
 
 
 def get_thickness_from_topbot(top, bot):
@@ -1273,88 +1358,3 @@ def update_idomain_from_thickness(idomain, thickness, mask):
             idomain[lay] = xr.where(mask3, 1, idomain[lay])
 
     return idomain
-
-
-def get_regis_dataset(regis_ds_raw=None,
-                      extent=None,
-                      delr=None,
-                      delc=None,
-                      gridtype='structured',
-                      interp_method="linear",
-                      gridprops=None,
-                      cachedir=None,
-                      fname_netcdf='regis.nc',
-                      use_cache=False,
-                      verbose=False):
-    """ Get a regis dataset that is resampled to the modelgrid
-
-    Parameters
-    ----------
-    regis_ds_raw : xarray.Dataset, optional
-        dataset with raw regis data (netcdf from url). The default is None.
-    extent : list, tuple or np.array
-        extent (xmin, xmax, ymin, ymax) of the desired grid.
-    delr : int or float
-        cell size along rows of the desired grid (dx).
-    delc : int or float
-        cell size along columns of the desired grid (dy).
-    gridtype : str, optional
-        type of grid, options are 'structured' and 'unstructured'. 
-        The default is 'structured'.
-    interp_method : str, optional
-        interpolation method, default is 'linear'
-    gridprops : dictionary, optional
-        dictionary with grid properties output from gridgen. Only used if
-        gridtype = 'unstructured'
-    cachedir : str, optional
-        directory to store cached values, if None a temporary directory is
-        used. default is None
-    fname_netcdf : str
-        name of the netcdf file that is stored in the cachedir.
-    use_cache : bool, optional
-        if True the cached resampled regis dataset is used. 
-        The default is False.
-
-    Returns
-    -------
-    regis_ds : xarray.Dataset
-        dataset with regis data corresponding to the modelgrid
-
-    """
-    if cachedir is None:
-        cachedir = tempfile.gettempdir()
-
-    path_netcdf = os.path.join(cachedir, fname_netcdf)
-    if os.path.isfile(path_netcdf) and use_cache:
-        if verbose:
-            print(f'using cached regis dataset from file {path_netcdf}')
-        regis_ds = xr.open_dataset(path_netcdf)
-
-        return regis_ds
-
-    if gridtype == 'structured':
-        if verbose:
-            print(f'resample regis data to structured modelgrid')
-        regis_ds = resample_dataset_to_structured_grid(
-            regis_ds_raw, extent, delr, delc, kind=interp_method)
-        regis_ds.attrs['extent'] = extent
-        regis_ds.attrs['delr'] = delr
-        regis_ds.attrs['delc'] = delc
-    elif gridtype == 'unstructured':
-        if verbose:
-            print(f'resample regis data to unstructured modelgrid')
-        regis_ds = resample_dataset_to_unstructured_grid(
-            regis_ds_raw, gridprops)
-        regis_ds['x'] = xr.DataArray([r[1] for r in gridprops['cell2d']],
-                                     dims=('cid'),
-                                     coords={'cid': regis_ds.cid.data})
-
-        regis_ds['y'] = xr.DataArray([r[2] for r in gridprops['cell2d']],
-                                     dims=('cid'),
-                                     coords={'cid': regis_ds.cid.data})
-    if verbose:
-        print(f'write cache for resampled regis data to {path_netcdf}')
-
-    regis_ds.to_netcdf(path_netcdf)
-
-    return regis_ds

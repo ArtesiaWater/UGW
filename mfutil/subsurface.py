@@ -38,7 +38,6 @@ def add_kh_kv_from_regis_to_dataset(regis_ds, model_ds, anisotropy,
     model_ds.attrs['anisotropy'] = anisotropy
     model_ds.attrs['fill_value_kh'] = fill_value_kh
     model_ds.attrs['fill_value_kv'] = fill_value_kv
-
     kh_arr = regis_ds['kh'].data
     kv_arr = regis_ds['kv'].data
 
@@ -178,6 +177,7 @@ def add_top_bot_to_model_ds(regis_ds, model_ds,
 
     if verbose:
         print('using top and bottom from regis for modflow model')
+        print('replace nan values for inactive layers with dummy value')
 
     if gridtype == 'structured':
 
@@ -255,7 +255,7 @@ def add_top_bot_unstructured(regis_ds, model_ds, nodata=-999,
             lowest_bottom[i] = val
             if np.isnan(val):
                 raise ValueError(
-                    'this should never happen please contact Onno')
+                    'this should never happen please contact Artesia')
 
     # step 2: get highest top values of all layers without nan values
     highest_top = regis_ds['top'].data[0].copy()
@@ -269,7 +269,7 @@ def add_top_bot_unstructured(regis_ds, model_ds, nodata=-999,
             highest_top[i] = val
             if np.isnan(val):
                 raise ValueError(
-                    'this should never happen please contact Onno')
+                    'this should never happen please contact Artesia')
 
     # step 3: fill nans in all layers
     nlay = model_ds.dims['layer']
@@ -304,7 +304,7 @@ def add_top_bot_unstructured(regis_ds, model_ds, nodata=-999,
 
 def add_top_bot_structured(regis_ds, model_ds, nodata=-999,
                            max_per_nan_bot=50):
-    """Voeg top en bottom vanuit regis toe aan de model dataset
+    """voeg top en bottom vanuit regis toe aan de model dataset
 
     Deze functie is bedoeld voor structured arrays in modflow 6
 
