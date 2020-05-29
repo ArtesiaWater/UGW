@@ -1,12 +1,18 @@
 import os
 import sys
 import xarray as xr
+import geopandas as gpd
 
-sys.path.insert(1, "../mfutil")
+sys.path.insert(1, "../../mfutil")
 import mgrid
 
 # %% extent
 extent = (112000.0, 115200.0, 444800.0, 447000.0)
+
+shp = "../../data/modflow_sfw_schoonhoven/waterareas.shp"
+gdf = gpd.read_file(shp)
+bounds = gdf.geometry.total_bounds
+extent = [bounds[0], bounds[2], bounds[1], bounds[3]]
 
 # %% regis
 cs_regis = 100.  # cell size regis
@@ -24,5 +30,5 @@ nlay, lay_sel = mgrid.get_number_of_layers_from_regis(regis_ds_raw)
 regis_ds_raw = regis_ds_raw.sel(layer=lay_sel)
 
 # %% write netcdf
-datadir = '../data'
-regis_ds_raw.to_netcdf(os.path.join(datadir, 'regis_ugw_test.nc'))
+datadir = '../../data'
+regis_ds_raw.to_netcdf(os.path.join(datadir, 'regis_ugw_test2.nc'))
