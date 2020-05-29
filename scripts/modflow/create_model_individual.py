@@ -42,6 +42,11 @@ if not os.path.exists(figdir):
 if not os.path.exists(cachedir):
     os.mkdir(cachedir)
 
+# %% Load river
+# read shapefile
+water_shp = os.path.join(datadir, "modflow_sfw", "waterareas.shp")
+sfw = gpd.read_file(water_shp)
+
 # %% Time discretization
 # general
 time_units = 'DAYS'
@@ -249,9 +254,8 @@ rch = fp.mf6.ModflowGwfrcha(gwf,
 
 # %% RIV
 
-# read shapefile
-water_shp = os.path.join(datadir, "modflow_sfw", "waterareas.shp")
-sfw = gpd.read_file(water_shp)
+mask_bathymetry = sfw.admin != "RWS"
+sfw = sfw.loc[mask_bathymetry]
 
 # check implausible rbots
 mask = (sfw["BL"] > sfw[["ZP", "WP"]].min(axis=1))
@@ -324,8 +328,13 @@ if not steady_state:
     tseries_list = []
 
     for peilvak in sfw.src_id_wla.unique():
+        if peilvak is None:
+            continue
 
         peilen = sfw.loc[sfw.src_id_wla == peilvak, ["ZP", "WP"]].iloc[0]
+
+        if peilen.isna().any():
+            continue
 
         dt = pd.date_range(mstart, mend, freq="MS")
         dt_apr_oct = [i for i in dt if i.month in [4, 10]]
