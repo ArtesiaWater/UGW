@@ -23,8 +23,8 @@ start = default_timer()
 # %% Model settings
 
 use_cache = True
-model_ws = r'../../model/test002'
-model_name = 'test002'
+model_ws = r'../../model/test003'
+model_name = 'test003'
 
 # geef hier paths op
 datadir = r'../../data'
@@ -40,6 +40,11 @@ if not os.path.exists(figdir):
 
 if not os.path.exists(cachedir):
     os.mkdir(cachedir)
+
+# %% Shapefile (for RIV and extent)
+# read shapefile
+water_shp = os.path.join(datadir, "modflow_sfw_schoonhoven", "waterareas.shp")
+sfw = gpd.read_file(water_shp)
 
 # %% Time discretization
 # general
@@ -98,7 +103,9 @@ ims = fp.mf6.ModflowIms(sim,
 # %% Define modflow grid
 
 # extent = (111900.0, 116450.0, 442700.0, 447450.0)
-extent = (112000.0, 115200.0, 444800.0, 447000.0)
+# extent = (112000.0, 115200.0, 444800.0, 447000.0)
+bounds = sfw.geometry.total_bounds
+extent = (bounds[0], bounds[2], bounds[1], bounds[3])
 
 # geef hier waarden op
 delr = 50.            # zelfde als dx
@@ -111,7 +118,7 @@ length_units = 'METERS'
 extent, nrow, ncol = mgrid.fit_extent_to_regis(list(extent), delr, delc)
 
 # get regis dataset
-regis_path = os.path.join(datadir, 'regis_ugw_test.nc')
+regis_path = os.path.join(datadir, 'regis_ugw_test2.nc')
 regis_ds_raw = xr.open_dataset(regis_path).sel(x=slice(extent[0], extent[1]),
                                                y=slice(extent[2], extent[3]))
 
@@ -244,9 +251,8 @@ rch = fp.mf6.ModflowGwfrcha(gwf,
 
 # %% RIV
 
-# read shapefile
-water_shp = os.path.join(datadir, "modflow_sfw", "waterareas.shp")
-sfw = gpd.read_file(water_shp)
+mask_bathymetry = sfw.admin != "RWS"
+sfw = sfw.loc[mask_bathymetry]
 
 # check implausible rbots
 mask = (sfw["BL"] > sfw[["ZP", "WP"]].min(axis=1))
@@ -284,9 +290,11 @@ calc_cols = ["ZP", "WP"]
 mdata = pd.DataFrame(index=gr.groups.keys())
 for igr, group in tqdm(gr):
     idf = group
+
     for icol in calc_cols:
         # area-weighted
-        mdata.loc[igr, icol] = (idf.area * idf[icol]).sum() / idf.area.sum()
+        mdata.loc[igr, icol] = \
+            (idf.area * idf[icol]).sum(skipna=False) / idf.area.sum()
 
     # lowest rbot
     lowest_rbot = idf["BL"].min()
@@ -303,13 +311,14 @@ for igr, group in tqdm(gr):
     mdata.loc[igr, "area"] = idf.area.sum()
 
     # wla of largest surface water feature
-    mdata.loc[igr, "name_largest"] = idf.loc[idf.area.idxmax(), "src_id_wla"]
+    name_largest = idf.loc[idf.area.idxmax(), "src_id_wla"]
+    mdata.loc[igr, "name_largest"] = name_largest
 
 spd = []
 cbot = 1.0  # bottom resistance, days
 
 for cellid, row in mdata.iterrows():
-    
+
     rbot = row["BL"]
     laytop = model_ds.top.isel(x=cellid[1], y=cellid[0])
     laybot = model_ds.bot.isel(x=cellid[1], y=cellid[0])
@@ -320,12 +329,18 @@ for cellid, row in mdata.iterrows():
     else:
         layers = [0]
     if (laybot.data > rbot).sum() > 0:
-        layers += list(range(1, (laybot.data > rbot).sum()+1))
-    
+        layers += list(range(1, (laybot.data > rbot).sum() + 1))
+
     if steady_state:
         stage = row[["ZP", "WP"]].mean()  # mean level summer/winter
     else:
         stage = row["name_largest"]
+        if stage is None:
+            stage = row[["ZP", "WP"]].mean()
+        elif isinstance(stage, str):
+            stage = stage.replace(".", "_")
+        elif stage.isna():
+            continue
     cond = row["area"] / cbot
     # rbot = row["BL"] if row["BL"] < stage else stage - 1.0
 
@@ -346,8 +361,12 @@ if not steady_state:
     tseries_list = []
 
     for peilvak in sfw.src_id_wla.unique():
-
+        if peilvak is None:
+            continue
         peilen = sfw.loc[sfw.src_id_wla == peilvak, ["ZP", "WP"]].iloc[0]
+
+        if peilen.isna().any():
+            continue
 
         dt = pd.date_range(mstart, mend, freq="MS")
         dt_apr_oct = [i for i in dt if i.month in [4, 10]]
@@ -360,7 +379,7 @@ if not steady_state:
         ts = pd.Series(index=dtnum, dtype=float)
         ts.where(dt.month == 4, peilen.ZP, inplace=True)
         ts.where(dt.month == 10, peilen.WP, inplace=True)
-        ts.name = peilvak
+        ts.name = peilvak.replace(".", "_")
         tseries_list.append(ts)
 
     ts0 = tseries_list[0]
