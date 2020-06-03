@@ -8,7 +8,7 @@ from timeit import default_timer
 
 # import custom flopy
 import sys
-sys.path.insert(1, "/home/david/Github/flopy_db")
+#sys.path.insert(1, "/home/david/Github/flopy_db")
 import flopy as fp
 
 # import custom module
@@ -17,7 +17,6 @@ import mtime
 import mgrid
 import subsurface
 import util
-
 
 start = default_timer()
 
@@ -78,7 +77,7 @@ tdis_perioddata = [(model_ds.perlen, model_ds.nstp,
 # %% SIM
 # Create the Flopy simulation object
 sim = fp.mf6.MFSimulation(sim_name=model_name,
-                          exe_name='mf6',
+                          exe_name='../../mfutil/mf6',
                           version='mf6',
                           sim_ws=model_ws)
 
@@ -270,7 +269,7 @@ if mask.sum() > 0:
     sfw.loc[mask, "BL"] = sfw.loc[mask, ["ZP", "WP"]].min() - 1.0
 
 # intersection
-ix = fp.utils.GridIntersect(gwf.modelgrid, method="vertex", rtree="strtree")
+ix = fp.utils.GridIntersect(gwf.modelgrid)
 
 # intersect with modelgrid and store attributes
 keep_cols = ["CAT", "Z", "ZP", "WP", "BL", "BB", "src_id_wla"]
