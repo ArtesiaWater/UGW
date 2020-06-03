@@ -24,8 +24,8 @@ start = default_timer()
 # %% Model settings
 
 use_cache = True
-model_ws = r'../../model/test001'
-model_name = 'test001'
+model_ws = r'../../model/test004'
+model_name = 'test004'
 
 # geef hier paths op
 datadir = r'../../data'
@@ -44,7 +44,7 @@ if not os.path.exists(cachedir):
 
 # %% Load river
 # read shapefile
-water_shp = os.path.join(datadir, "modflow_sfw", "waterareas.shp")
+water_shp = os.path.join(datadir, "modflow_sfw_schoonhoven", "waterareas.shp")
 sfw = gpd.read_file(water_shp)
 
 # %% Time discretization
@@ -104,7 +104,9 @@ ims = fp.mf6.ModflowIms(sim,
 # %% Define modflow grid
 
 # extent = (111900.0, 116450.0, 442700.0, 447450.0)  # full riv shape
-extent = (112000.0, 115200.0, 444800.0, 447000.0)
+# extent = (112000.0, 115200.0, 444800.0, 447000.0)
+bounds = sfw.geometry.total_bounds
+extent = (bounds[0], bounds[2], bounds[1], bounds[3])
 
 delr = 10.            # zelfde als dx
 delc = 10.            # zelfde als dy
@@ -116,7 +118,7 @@ length_units = 'METERS'
 extent, nrow, ncol = mgrid.fit_extent_to_regis(list(extent), delr, delc)
 
 # get regis dataset
-regis_path = os.path.join(datadir, 'regis_ugw_test.nc')
+regis_path = os.path.join(datadir, 'regis_ugw_test2.nc')
 regis_ds_raw = xr.open_dataset(regis_path).sel(x=slice(extent[0], extent[1]),
                                                y=slice(extent[2], extent[3]))
 
@@ -254,7 +256,10 @@ rch = fp.mf6.ModflowGwfrcha(gwf,
 
 # %% RIV
 
-mask_bathymetry = sfw.admin != "RWS"
+mask_bathymetry = ((sfw.admin != "RWS") &
+                   (sfw.src_id_wla != "NL.9.Lek") &
+                   (sfw.src_id_wla != "NL.39.Lek") &
+                   (~sfw.src_id_wla.isna()))
 sfw = sfw.loc[mask_bathymetry]
 
 # check implausible rbots

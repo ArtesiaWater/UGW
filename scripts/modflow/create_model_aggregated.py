@@ -251,7 +251,10 @@ rch = fp.mf6.ModflowGwfrcha(gwf,
 
 # %% RIV
 
-mask_bathymetry = sfw.admin != "RWS"
+mask_bathymetry = ((sfw.admin != "RWS") &
+                   (sfw.src_id_wla != "NL.9.Lek") &
+                   (sfw.src_id_wla != "NL.39.Lek") &
+                   (~sfw.src_id_wla.isna()))
 sfw = sfw.loc[mask_bathymetry]
 
 # check implausible rbots
@@ -299,8 +302,12 @@ for igr, group in tqdm(gr):
     # lowest rbot
     lowest_rbot = idf["BL"].min()
     lowest_lvl = mdata.loc[igr, calc_cols].min()
-    if lowest_rbot >= lowest_lvl:
-        lowest_rbot = lowest_lvl - 0.5
+    if np.isnan(lowest_lvl) or np.isnan(lowest_rbot):
+        lowest_rbot = np.nan
+        raise ValueError("RBOT is NaN!")
+    else:
+        if lowest_rbot >= lowest_lvl:
+            lowest_rbot = lowest_lvl - 0.5
     mdata.loc[igr, "BL"] = lowest_rbot
 
     # estimate length from polygon
