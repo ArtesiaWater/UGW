@@ -6,17 +6,15 @@ import geopandas as gpd
 from tqdm import tqdm
 from timeit import default_timer
 
-# import custom flopy
+# import custom flopy (soon this can be done from the official latest release)
 import sys
-#sys.path.insert(1, "/home/david/Github/flopy_db")
+sys.path.insert(1, "../../../../flopy_db")
 import flopy as fp
 
-# import custom module
-sys.path.insert(1, "../../mfutil")
-import mtime
-import mgrid
-import subsurface
-import util
+# import modules from NHFLO repo (for now)
+sys.path.insert(2, "../../../../NHFLO/NHFLOPY")
+from modules import mgrid, mtime, subsurface, util
+
 
 start = default_timer()
 
@@ -27,7 +25,7 @@ model_ws = r'../../model/test004'
 model_name = 'test004'
 
 # geef hier paths op
-datadir = r'../../data'
+datadir = r'../../../data'
 figdir = os.path.join(model_ws, 'figure')
 cachedir = os.path.join(model_ws, 'cache')
 
@@ -62,14 +60,14 @@ steady_start = False  # if True start transient model with steady timestep
 perlen = 30  # length of timestep in time_units (see below)
 
 # %% time discretization
-model_ds = mtime.get_model_ts(start_time=start_time,
-                              steady_state=steady_state,
-                              steady_start=steady_start,
-                              time_units=time_units,
-                              transient_timesteps=transient_timesteps,
-                              perlen=perlen,
-                              nstp=nstp,
-                              tsmult=tsmult)
+model_ds = mtime.get_model_ds_time(start_time=start_time,
+                                   steady_state=steady_state,
+                                   steady_start=steady_start,
+                                   time_units=time_units,
+                                   transient_timesteps=transient_timesteps,
+                                   perlen=perlen,
+                                   nstp=nstp,
+                                   tsmult=tsmult)
 
 tdis_perioddata = [(model_ds.perlen, model_ds.nstp,
                     model_ds.tsmult)] * model_ds.nper
@@ -77,7 +75,7 @@ tdis_perioddata = [(model_ds.perlen, model_ds.nstp,
 # %% SIM
 # Create the Flopy simulation object
 sim = fp.mf6.MFSimulation(sim_name=model_name,
-                          exe_name='../../mfutil/mf6',
+                          exe_name='mf6',
                           version='mf6',
                           sim_ws=model_ws)
 
@@ -107,9 +105,8 @@ ims = fp.mf6.ModflowIms(sim,
 bounds = sfw.geometry.total_bounds
 extent = (bounds[0], bounds[2], bounds[1], bounds[3])
 
-delr = 10.            # zelfde als dx
-delc = 10.            # zelfde als dy
-nlay = 36             # alle actieve regis lagen
+delr = 20.            # zelfde als dx
+delc = 20.            # zelfde als dy
 angrot = 0            # nog niet geimplementeerd
 length_units = 'METERS'
 
@@ -134,7 +131,7 @@ regis_ds = util.get_regis_dataset(gridtype='structured',
                                   delc=delc,
                                   interp_method="nearest",
                                   cachedir=cachedir,
-                                  fname_netcdf='regis_ugw_test.nc',
+                                  fname_netcdf='regis_ugw_test2.nc',
                                   use_cache=use_cache)
 
 # %% get model_ds, add idomain, top & bot
@@ -269,7 +266,7 @@ if mask.sum() > 0:
     sfw.loc[mask, "BL"] = sfw.loc[mask, ["ZP", "WP"]].min() - 1.0
 
 # intersection
-ix = fp.utils.GridIntersect(gwf.modelgrid)
+ix = fp.utils.GridIntersect(gwf.modelgrid, method="vertex", rtree="strtree")
 
 # intersect with modelgrid and store attributes
 keep_cols = ["CAT", "Z", "ZP", "WP", "BL", "BB", "src_id_wla"]
