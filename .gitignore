@@ -132,6 +132,7 @@ data/*
 gis
 model
 .vscode
+_modules_old/
 
 !data/.gitkeep
 !data/input/.gitkeep
