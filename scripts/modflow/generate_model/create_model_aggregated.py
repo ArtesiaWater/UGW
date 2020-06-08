@@ -266,7 +266,6 @@ if mask.sum() > 0:
     sfw.loc[mask, "BL"] = (sfw.loc[mask, ["ZP", "WP"]].min() - 1.0).values
 
 sfw_grid = surface_water.gdf2grid(sfw, gwf)
-sfw.loc[sfw['name'].isna(),'name'] = ''
 
 # Post process intersection result
 gr = sfw_grid.groupby(by="cellid")
