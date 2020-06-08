@@ -52,7 +52,7 @@ tsmult = 1.0
 
 # steady-state/transient
 steady_state = False  # steady state flag
-start_time = '2020-01-01'  # start time
+start_time = '2020-01-01'  # start time (after the steady state period)
 
 # no. of transient time steps (only if steady is False)
 transient_timesteps = 24
@@ -75,7 +75,7 @@ tdis_perioddata = [(model_ds.perlen, model_ds.nstp,
 # %% SIM
 # Create the Flopy simulation object
 sim = fp.mf6.MFSimulation(sim_name=model_name,
-                          exe_name='mf6',
+                          exe_name='../../../mf6',
                           version='mf6',
                           sim_ws=model_ws)
 
@@ -266,7 +266,7 @@ if mask.sum() > 0:
     sfw.loc[mask, "BL"] = sfw.loc[mask, ["ZP", "WP"]].min() - 1.0
 
 # intersection
-ix = fp.utils.GridIntersect(gwf.modelgrid, method="vertex", rtree="strtree")
+ix = fp.utils.GridIntersect(gwf.modelgrid)
 
 # intersect with modelgrid and store attributes
 keep_cols = ["CAT", "Z", "ZP", "WP", "BL", "BB", "src_id_wla"]

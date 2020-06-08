@@ -17,7 +17,7 @@ import flopy as fp
 
 # import modules from NHFLO repo (for now)
 sys.path.insert(2, "../../../../NHFLO/NHFLOPY")
-from modules import mgrid, mtime, subsurface, util
+from modules import mgrid, mtime, subsurface, util, rws, surface_water
 
 start = default_timer()
 
@@ -55,12 +55,12 @@ tsmult = 1.0
 
 # steady-state/transient
 steady_state = False  # steady state flag
-start_time = '2020-01-01'  # start time
+start_time = '2019-01-01'  # start time (after the steady state period)
 
 # no. of transient time steps (only if steady is False)
-transient_timesteps = 24
+transient_timesteps = int(365/10)
 steady_start = True  # if True start transient model with steady timestep
-perlen = 30  # length of timestep in time_units (see below)
+perlen = 10  # length of timestep in time_units (see below)
 
 # %% time discretization
 model_ds = mtime.get_model_ds_time(start_time=start_time,
@@ -78,7 +78,7 @@ tdis_perioddata = [(model_ds.perlen, model_ds.nstp,
 # %% SIM
 # Create the Flopy simulation object
 sim = fp.mf6.MFSimulation(sim_name=model_name,
-                          exe_name='mf6',
+                          exe_name='../../../tools/mf6',
                           version='mf6',
                           sim_ws=model_ws)
 
@@ -265,31 +265,11 @@ if mask.sum() > 0:
     print("... setting RBOT 1 m below lowest water level")
     sfw.loc[mask, "BL"] = (sfw.loc[mask, ["ZP", "WP"]].min() - 1.0).values
 
-# intersection
-ix = fp.utils.GridIntersect(gwf.modelgrid, method="vertex", rtree="strtree")
-
-# intersect with modelgrid and store attributes
-keep_cols = ["CAT", "Z", "ZP", "WP", "BL", "BB", "src_id_wla"]
-collect_ix = []
-for irow, ishp in tqdm(iterable=sfw.iterrows(), total=sfw.index.size):
-    r = ix.intersect_polygon(ishp.geometry)
-    idf = gpd.GeoDataFrame(r, geometry="ixshapes")
-    # add attributes
-    for icol in keep_cols:
-        idf[icol] = ishp[icol]
-        idf["ishp"] = irow  # id to original shape
-    if ishp["name"] is not None:
-        idf["name"] = ishp["name"]
-    else:
-        idf["name"] = ""
-    collect_ix.append(idf)
-
-sfw_grid = pd.concat(collect_ix, axis=0)
-sfw_grid = sfw_grid.reset_index(drop=True).astype({"BL": np.float,
-                                                   "BB": np.float})
+sfw_grid = surface_water.gdf2grid(sfw, gwf)
+sfw.loc[sfw['name'].isna(),'name'] = ''
 
 # Post process intersection result
-gr = sfw_grid.groupby(by="cellids")
+gr = sfw_grid.groupby(by="cellid")
 calc_cols = ["ZP", "WP"]
 mdata = pd.DataFrame(index=gr.groups.keys())
 for igr, group in tqdm(gr):
@@ -401,6 +381,41 @@ if not steady_state:
                                   zip(its.index.to_list(), its.to_list())),
                               time_series_namerecord=its.name,
                               interpolation_methodrecord='stepwise')
+        
+# %% RIV2
+fname = os.path.join(datadir, '20200603_044.zip')
+
+riv2stn = {}
+riv2stn['Amsterdam-Rijnkanaal Betuwepand'] = ['Tiel Kanaal']
+riv2stn['Amsterdam-Rijnkanaal Noordpand'] = ['Amsterdam Surinamekade',
+   'Weesp West','Maarssen','Nieuwegein','Wijk bij Duurstede kanaal']
+riv2stn['Bedijkte Maas'] = ['Lith boven','Megen dorp','Grave beneden']
+riv2stn['Beneden Maas'] = ['Heesbeen','Empel beneden','Lith dorp']
+riv2stn['Bovenrijn, Waal'] = ['Vuren','Zaltbommel','Tiel Waal','Dodewaard',
+   'Nijmegen haven']
+riv2stn['Boven- en Beneden Merwede'] = ['Dordrecht','Werkendam buiten','Vuren']
+riv2stn['Dordtse Biesbosch'] = ['Moerdijk','Werkendam buiten']
+riv2stn['Hollandsche IJssel'] = ['Krimpen a/d IJssel','Gouda brug']
+riv2stn['Markermeer'] = ['Schellingwouderbrug','Hollandse brug']
+riv2stn['Nederrijn, Lek'] = ['Hagestein boven','Culemborg brug',
+   'Amerongen beneden','Amerongen boven','Grebbe','Driel beneden']
+riv2stn['Noordzeekanaal'] = ['IJmuiden binnen','Buitenhuizen (kilometer 10)',
+   'Amsterdam Surinamekade','Weesp West']
+riv2stn['Oude Maas'] = ['Krimpen a/d IJssel', 'Krimpen a/d Lek','Schoonhoven',
+   'Hagestein beneden']
+riv2stn['Randmeren-zuid'] = ['Hollandse brug','Nijkerk west']
+riv2stn['Randmeren-oost'] = ['Nijkerk Nuldernauw','Elburg']
+
+gdfv = rws.get_river_polygons(extent)
+gdfl = rws.get_river_lines(extent)
+if not os.path.isfile(fname):
+    msg = 'Connot find file {0}. Please run below code (after changing your e-mail adress) to request data and place requested file in {0}.'
+    raise(Exception(msg.format(fname)))
+    surface_water.request_waterinfo_waterlevels(riv2stn,'mail_adress',
+                                                tmin=model_ds.time.values[0],
+                                                tmax=model_ds.time.values[-1])
+surface_water.waterinfo_to_ghb(fname, riv2stn, gdfv, gwf, gdfl=gdfl,
+                               steady_start=steady_start)
 
 # %% OC
 
