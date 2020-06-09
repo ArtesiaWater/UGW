@@ -2,6 +2,7 @@ import os
 import sys
 import xarray as xr
 import geopandas as gpd
+import zipfile
 
 sys.path.append("../../../../NHFLO/NHFLOPY")
 from modules import mgrid, util
@@ -38,3 +39,14 @@ regis_ds_raw.to_netcdf(os.path.join(datadir, 'regis_ugw_test2.nc'))
 # the waterinfo file
 fname = os.path.join(datadir,'20200603_044.zip')
 util.download_file_from_google_drive('1jG7KvCSQH1PLGI00HYo4EpjYxTM1UCAr',fname)
+
+# modflow.zip
+fname = os.path.join(datadir,'modflow.zip')
+util.download_file_from_google_drive('1k0QiOlMLAg5KS-B9Tra4ncpRnBvOylX0',fname)
+# extract to modflow_sfw_schoonhoven
+with zipfile.ZipFile(fname, 'r') as zip_ref:
+    zip_ref.extractall(os.path.join(datadir, 'modflow_sfw_schoonhoven'))
+
+# bathiemetry
+fname = os.path.join(datadir,'Bathymetry.zip')
+util.download_file_from_google_drive('1k0O6FiOpsjy8-wA0cVgLzuNmAYBwz4IX', fname)
