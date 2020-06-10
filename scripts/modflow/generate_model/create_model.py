@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 # import custom flopy (soon this can be done from the official latest release)
 import sys
-sys.path.insert(1, "../../../../flopy_db")
+# sys.path.insert(1, "../../../../flopy_db")
 import flopy as fp
 
 # import modules from NHFLO repo (for now)
@@ -26,6 +26,9 @@ start = default_timer()
 use_cache = True
 model_ws = r'../../model/test003'
 model_name = 'test003'
+
+# method
+riv_method = "aggregated"
 
 # geef hier paths op
 datadir = r'../../../data'
@@ -58,7 +61,7 @@ steady_state = False  # steady state flag
 start_time = '2019-01-01'  # start time (after the steady state period)
 
 # no. of transient time steps (only if steady is False)
-transient_timesteps = int(365/10)
+transient_timesteps = int(365 / 10)
 steady_start = True  # if True start transient model with steady timestep
 perlen = 10  # length of timestep in time_units (see below)
 
@@ -78,7 +81,7 @@ tdis_perioddata = [(model_ds.perlen, model_ds.nstp,
 # %% SIM
 # Create the Flopy simulation object
 sim = fp.mf6.MFSimulation(sim_name=model_name,
-                          exe_name='../../../tools/mf6',
+                          exe_name='mf6',
                           version='mf6',
                           sim_ws=model_ws)
 
@@ -111,7 +114,6 @@ extent = (bounds[0], bounds[2], bounds[1], bounds[3])
 # geef hier waarden op
 delr = 50.            # zelfde als dx
 delc = 50.            # zelfde als dy
-nlay = 36             # alle actieve regis lagen
 angrot = 0            # nog niet geimplementeerd
 length_units = 'METERS'
 
@@ -265,80 +267,144 @@ if mask.sum() > 0:
     print("... setting RBOT 1 m below lowest water level")
     sfw.loc[mask, "BL"] = (sfw.loc[mask, ["ZP", "WP"]].min() - 1.0).values
 
-sfw_grid = surface_water.gdf2grid(sfw, gwf)
 
-# Post process intersection result
-gr = sfw_grid.groupby(by="cellid")
-calc_cols = ["ZP", "WP"]
-mdata = pd.DataFrame(index=gr.groups.keys())
-for igr, group in tqdm(gr):
-    idf = group
+if riv_method == "aggregated":
+    boundnames = False
+    sfw_grid = surface_water.gdf2grid(sfw, gwf, method="vertex")
 
-    for icol in calc_cols:
-        # area-weighted
-        mdata.loc[igr, icol] = \
-            (idf.area * idf[icol]).sum(skipna=False) / idf.area.sum()
+    # Post process intersection result
+    gr = sfw_grid.groupby(by="cellid")
+    calc_cols = ["ZP", "WP"]
+    mdata = pd.DataFrame(index=gr.groups.keys())
+    for igr, group in tqdm(gr):
+        idf = group
 
-    # lowest rbot
-    lowest_rbot = idf["BL"].min()
-    lowest_lvl = mdata.loc[igr, calc_cols].min()
-    if np.isnan(lowest_lvl) or np.isnan(lowest_rbot):
-        lowest_rbot = np.nan
-        raise ValueError("RBOT is NaN!")
-    else:
-        if lowest_rbot >= lowest_lvl:
-            lowest_rbot = lowest_lvl - 0.5
-    mdata.loc[igr, "BL"] = lowest_rbot
+        for icol in calc_cols:
+            # area-weighted
+            mdata.loc[igr, icol] = \
+                (idf.area * idf[icol]).sum(skipna=False) / idf.area.sum()
 
-    # estimate length from polygon
-    mdata.loc[igr, "len_estimate"] = (
-        (idf.length + np.sqrt(idf.length**2 - 16 * idf.area)) / 4).sum()
+        # lowest rbot
+        lowest_rbot = idf["BL"].min()
+        lowest_lvl = mdata.loc[igr, calc_cols].min()
+        if np.isnan(lowest_lvl) or np.isnan(lowest_rbot):
+            lowest_rbot = np.nan
+            raise ValueError("RBOT is NaN!")
+        else:
+            if lowest_rbot >= lowest_lvl:
+                lowest_rbot = lowest_lvl - 0.5
+        mdata.loc[igr, "BL"] = lowest_rbot
 
-    # area
-    mdata.loc[igr, "area"] = idf.area.sum()
+        # estimate length from polygon
+        mdata.loc[igr, "len_estimate"] = (
+            (idf.length + np.sqrt(idf.length**2 - 16 * idf.area)) / 4).sum()
 
-    # wla of largest surface water feature
-    name_largest = idf.loc[idf.area.idxmax(), "src_id_wla"]
-    mdata.loc[igr, "name_largest"] = name_largest
+        # area
+        mdata.loc[igr, "area"] = idf.area.sum()
 
-spd = []
-cbot = 1.0  # bottom resistance, days
+        # wla of largest surface water feature
+        name_largest = idf.loc[idf.area.idxmax(), "src_id_wla"]
+        mdata.loc[igr, "name_largest"] = name_largest
 
-for cellid, row in mdata.iterrows():
+    spd = []
+    cbot = 1.0  # bottom resistance, days
 
-    rbot = row["BL"]
-    laytop = model_ds.top.isel(x=cellid[1], y=cellid[0])
-    laybot = model_ds.bot.isel(x=cellid[1], y=cellid[0])
+    for cellid, row in mdata.iterrows():
 
-    layers = []
-    if laytop.data < rbot:
-        layers = [0]  # weirdness, rbot above top of model
-    else:
-        layers = [0]
-    if (laybot.data > rbot).sum() > 0:
-        layers += list(range(1, (laybot.data > rbot).sum() + 1))
+        rbot = row["BL"]
+        laytop = model_ds.top.isel(x=cellid[1], y=cellid[0])
+        laybot = model_ds.bot.isel(x=cellid[1], y=cellid[0])
 
-    if steady_state:
-        stage = row[["ZP", "WP"]].mean()  # mean level summer/winter
-    else:
-        stage = row["name_largest"]
-        if stage is None:
-            stage = row[["ZP", "WP"]].mean()
-        elif isinstance(stage, str):
-            stage = stage.replace(".", "_")
-        elif stage.isna():
-            continue
-    cond = row["area"] / cbot
-    # rbot = row["BL"] if row["BL"] < stage else stage - 1.0
+        layers = []
+        if laytop.data < rbot:
+            layers = [0]  # weirdness, rbot above top of model
+        else:
+            layers = [0]
+        if (laybot.data > rbot).sum() > 0:
+            layers += list(range(1, (laybot.data > rbot).sum() + 1))
 
-    for nlay in layers:
-        cid = (nlay,) + cellid
-        spd.append([cid, stage, cond, rbot])
+        if steady_state:
+            stage = row[["ZP", "WP"]].mean()  # mean level summer/winter
+        else:
+            stage = row["name_largest"]
+            if stage is None:
+                stage = row[["ZP", "WP"]].mean()
+            elif isinstance(stage, str):
+                stage = stage.replace(".", "_")
+            elif stage.isna():
+                continue
+        cond = row["area"] / cbot
+        # rbot = row["BL"] if row["BL"] < stage else stage - 1.0
+
+        for nlay in layers:
+            cid = (nlay,) + cellid
+            spd.append([cid, stage, cond, rbot])
+
+elif riv_method == "individual":
+    boundnames = True
+
+    # intersection
+    ix = fp.utils.GridIntersect(gwf.modelgrid, method="vertex")
+
+    # intersect with modelgrid and store attributes
+    keep_cols = ["CAT", "Z", "ZP", "WP", "BL", "BB", "src_id_wla"]
+    collect_ix = []
+    for irow, ishp in tqdm(iterable=sfw.iterrows(), total=sfw.index.size):
+        r = ix.intersect_polygon(ishp.geometry)
+        idf = gpd.GeoDataFrame(r, geometry="ixshapes")
+        # add attributes
+        for icol in keep_cols:
+            idf[icol] = ishp[icol]
+            idf["ishp"] = irow  # id to original shape
+        if ishp["name"] is not None:
+            idf["name"] = ishp["name"]
+        else:
+            idf["name"] = ""
+        collect_ix.append(idf)
+
+    sfw_grid = pd.concat(collect_ix, axis=0)
+    sfw_grid = sfw_grid.reset_index(drop=True).astype({"BL": np.float,
+                                                       "BB": np.float})
+
+    # individual method
+    spd = []
+    cbot = 1.0
+    for i, row in sfw_grid.iterrows():
+
+        cid = (0,) + row["cellids"]
+        if steady_state:
+            stage = row[["ZP", "WP"]].mean()  # mean level summer/winter
+        else:
+            stage = row["src_id_wla"]
+        cond = row["areas"] / cbot
+        rbot = row["BL"] if row["BL"] < row["WP"] else row["WP"] - 1.0
+        name = row["name"].replace(" ", "_")
+
+        spd.append([cid, stage, cond, rbot, name])
+
+else:
+    raise ValueError(
+        f"Invalid method for creating RIV package: '{riv_method}'")
+
 
 riv = fp.mf6.ModflowGwfriv(gwf,
                            stress_period_data=spd,
+                           boundnames=boundnames,
                            save_flows=True,
                            maxbound=len(spd))
+
+if boundnames:
+    # build obs data
+    riv_obs = {'riv_flows.csv': [
+        ('H_IJssel', 'RIV', 'Gekanaliseerde_Hollandsche_IJssel'),
+        ('Gr_Keulevaart', 'RIV', 'Tiendwegwetering_Groot_Keulevaart'),
+        ('Vlist', 'RIV', 'Vlist')]}
+
+    # initialize obs package
+    riv.obs.initialize(filename=f'{model_name}.riv.obs',
+                       digits=9,
+                       print_input=True,
+                       continuous=riv_obs)
 
 # model period
 mstart = pd.Timestamp(start_time)
@@ -380,41 +446,49 @@ if not steady_state:
                                   zip(its.index.to_list(), its.to_list())),
                               time_series_namerecord=its.name,
                               interpolation_methodrecord='stepwise')
-        
+
 # %% RIV2
 fname = os.path.join(datadir, '20200603_044.zip')
 
 riv2stn = {}
 riv2stn['Amsterdam-Rijnkanaal Betuwepand'] = ['Tiel Kanaal']
 riv2stn['Amsterdam-Rijnkanaal Noordpand'] = ['Amsterdam Surinamekade',
-   'Weesp West','Maarssen','Nieuwegein','Wijk bij Duurstede kanaal']
-riv2stn['Bedijkte Maas'] = ['Lith boven','Megen dorp','Grave beneden']
-riv2stn['Beneden Maas'] = ['Heesbeen','Empel beneden','Lith dorp']
-riv2stn['Bovenrijn, Waal'] = ['Vuren','Zaltbommel','Tiel Waal','Dodewaard',
-   'Nijmegen haven']
-riv2stn['Boven- en Beneden Merwede'] = ['Dordrecht','Werkendam buiten','Vuren']
-riv2stn['Dordtse Biesbosch'] = ['Moerdijk','Werkendam buiten']
-riv2stn['Hollandsche IJssel'] = ['Krimpen a/d IJssel','Gouda brug']
-riv2stn['Markermeer'] = ['Schellingwouderbrug','Hollandse brug']
-riv2stn['Nederrijn, Lek'] = ['Hagestein boven','Culemborg brug',
-   'Amerongen beneden','Amerongen boven','Grebbe','Driel beneden']
-riv2stn['Noordzeekanaal'] = ['IJmuiden binnen','Buitenhuizen (kilometer 10)',
-   'Amsterdam Surinamekade','Weesp West']
-riv2stn['Oude Maas'] = ['Krimpen a/d IJssel', 'Krimpen a/d Lek','Schoonhoven',
-   'Hagestein beneden']
-riv2stn['Randmeren-zuid'] = ['Hollandse brug','Nijkerk west']
-riv2stn['Randmeren-oost'] = ['Nijkerk Nuldernauw','Elburg']
+                                             'Weesp West', 'Maarssen',
+                                             'Nieuwegein',
+                                             'Wijk bij Duurstede kanaal']
+riv2stn['Bedijkte Maas'] = ['Lith boven', 'Megen dorp', 'Grave beneden']
+riv2stn['Beneden Maas'] = ['Heesbeen', 'Empel beneden', 'Lith dorp']
+riv2stn['Bovenrijn, Waal'] = ['Vuren', 'Zaltbommel', 'Tiel Waal', 'Dodewaard',
+                              'Nijmegen haven']
+riv2stn['Boven- en Beneden Merwede'] = ['Dordrecht',
+                                        'Werkendam buiten',
+                                        'Vuren']
+riv2stn['Dordtse Biesbosch'] = ['Moerdijk', 'Werkendam buiten']
+riv2stn['Hollandsche IJssel'] = ['Krimpen a/d IJssel', 'Gouda brug']
+riv2stn['Markermeer'] = ['Schellingwouderbrug', 'Hollandse brug']
+riv2stn['Nederrijn, Lek'] = ['Hagestein boven', 'Culemborg brug',
+                             'Amerongen beneden', 'Amerongen boven',
+                             'Grebbe', 'Driel beneden']
+riv2stn['Noordzeekanaal'] = ['IJmuiden binnen', 'Buitenhuizen (kilometer 10)',
+                             'Amsterdam Surinamekade', 'Weesp West']
+riv2stn['Oude Maas'] = ['Krimpen a/d IJssel', 'Krimpen a/d Lek',
+                        'Schoonhoven', 'Hagestein beneden']
+riv2stn['Randmeren-zuid'] = ['Hollandse brug', 'Nijkerk west']
+riv2stn['Randmeren-oost'] = ['Nijkerk Nuldernauw', 'Elburg']
 
 gdfv = rws.get_river_polygons(extent)
 gdfl = rws.get_river_lines(extent)
 if not os.path.isfile(fname):
-    msg = 'Connot find file {0}. Please run below code (after changing your e-mail adress) to request data and place requested file in {0}.'
+    msg = ('Connot find file {0}. Please run below code (after changing '
+           'your e-mail adress) to request data and place requested '
+           'file in {0}.')
     raise(Exception(msg.format(fname)))
-    surface_water.request_waterinfo_waterlevels(riv2stn,'mail_adress',
+    surface_water.request_waterinfo_waterlevels(riv2stn, '<mail_adress>',
                                                 tmin=model_ds.time.values[0],
                                                 tmax=model_ds.time.values[-1])
 surface_water.waterinfo_to_ghb(fname, riv2stn, gdfv, gwf, gdfl=gdfl,
-                               steady_start=steady_start)
+                               steady_start=steady_start,
+                               intersect_method="vertex")
 
 # %% OC
 
@@ -456,6 +530,10 @@ cbc = fp.utils.CellBudgetFile(fname)
 spdis = cbc.get_data(text="SPDIS")
 qriv = cbc.get_data(kstpkper=(0, 0), text="RIV")[0]
 qriv3D = cbc.create3D(qriv, 1, gwf.modelgrid.nrow, gwf.modelgrid.ncol)
+qghb = cbc.get_data(kstpkper=(0, 0), text="GHB")[0]
+qghb3D = cbc.create3D(qghb, 1, gwf.modelgrid.nrow, gwf.modelgrid.ncol)
+
+q3D = qriv3D.data + qghb3D.data
 
 qx, qy, qz = fp.utils.postprocessing.get_specific_discharge(gwf,
                                                             fname,
@@ -499,7 +577,7 @@ fig.savefig(os.path.join(figdir, "head_layer0_norm-quiver.png"),
 
 fig, ax = plt.subplots(1, 1, figsize=(14, 10))
 mapview = fp.plot.PlotMapView(model=gwf)
-qm = mapview.plot_array(qriv3D / (delr * delc) * 1e3, cmap="RdBu_r")
+qm = mapview.plot_array(q3D / (delr * delc) * 1e3, cmap="RdBu_r")
 divider = make_axes_locatable(ax)
 cax = divider.append_axes('right', size='3%', pad=0.05)
 cbar = plt.colorbar(qm, cax=cax)
