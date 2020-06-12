@@ -1,3 +1,4 @@
+import sys
 import os
 from timeit import default_timer
 
@@ -9,15 +10,12 @@ import pandas as pd
 import xarray as xr
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from tqdm import tqdm
-
-# import custom flopy (soon this can be done from the official latest release)
-import sys
-# sys.path.insert(1, "../../../../flopy_db")
-import flopy as fp
+import flopy as fp  # latest develop branch
 
 # import modules from NHFLO repo (for now)
 sys.path.insert(2, "../../../../NHFLO/NHFLOPY")
 from modules import mgrid, mtime, subsurface, util, rws, surface_water
+from utils import de_lange
 
 start = default_timer()
 
@@ -29,6 +27,7 @@ model_name = 'test003'
 
 # method
 riv_method = "aggregated"
+delange = True
 
 # geef hier paths op
 datadir = r'../../../data'
@@ -267,8 +266,9 @@ if mask.sum() > 0:
     print("... setting RBOT 1 m below lowest water level")
     sfw.loc[mask, "BL"] = (sfw.loc[mask, ["ZP", "WP"]].min() - 1.0).values
 
-
+# aggregated
 if riv_method == "aggregated":
+
     boundnames = False
     sfw_grid = surface_water.gdf2grid(sfw, gwf, method="vertex")
 
@@ -296,11 +296,47 @@ if riv_method == "aggregated":
         mdata.loc[igr, "BL"] = lowest_rbot
 
         # estimate length from polygon
-        mdata.loc[igr, "len_estimate"] = (
-            (idf.length + np.sqrt(idf.length**2 - 16 * idf.area)) / 4).sum()
+        shape_factor = idf.length / np.sqrt(idf.area)
+        len_est1 = (
+            idf.length - np.sqrt(idf.length**2 - 16 * idf.area)) / 4
+        len_est2 = (
+            idf.length + np.sqrt(idf.length**2 - 16 * idf.area)) / 4
+        len_est = pd.concat([len_est1, len_est2], axis=1).max(axis=1)
+
+        # estimate length from minimum rotated rectangle
+        min_rect = idf.geometry.apply(lambda g: g.minimum_rotated_rectangle)
+        xy = min_rect.apply(lambda g: np.sqrt(
+            (np.array(g.exterior.xy[0]) - np.array(g.exterior.xy[0][0]))**2 +
+            (np.array(g.exterior.xy[1]) - np.array(g.exterior.xy[1][0]))**2))
+        len_est3 = xy.apply(lambda a: np.partition(a.flatten(), -2)[-2])
+        # update where shape factor is lower than 4
+        len_est.loc[shape_factor < 4] = len_est3.loc[shape_factor < 4]
+
+        mdata.loc[igr, "len_estimate"] = len_est.sum()
 
         # area
         mdata.loc[igr, "area"] = idf.area.sum()
+
+        # De Lange Params
+        laytop = model_ds.top.isel(x=igr[1], y=igr[0])
+        laybot = model_ds.bot.isel(x=igr[1], y=igr[0])
+
+        A = model_ds.delr * model_ds.delc  # cell area
+        H0 = laytop.data - laybot.data[0]  # layer thickness
+        kv = model_ds['kv'].data[0, igr[0], igr[1]]
+        kh = model_ds['kh'].data[0, igr[0], igr[1]]
+        c1 = 0.0  # resistance between phreatic layer and regional aquifer
+
+        li = mdata.loc[igr, "len_estimate"]  # length
+        B = mdata.loc[igr, "area"] / li  # width
+        c0 = 1.0  # river bottom resistance
+        p = idf.loc[idf.area.idxmax(), ["ZP", "WP"]].mean()  # waterlevel
+        N = 1e-3  # recharge
+
+        pstar, cstar, cond = de_lange(A, H0, kv, kh, c1, li, B, c0, p, N)
+        mdata.loc[igr, "pstar"] = pstar
+        mdata.loc[igr, "cstar"] = cstar
+        mdata.loc[igr, "cond"] = cond
 
         # wla of largest surface water feature
         name_largest = idf.loc[idf.area.idxmax(), "src_id_wla"]
@@ -328,12 +364,18 @@ if riv_method == "aggregated":
         else:
             stage = row["name_largest"]
             if stage is None:
+                # if delange:
+                #     stage = row["pstar"]
+                # else:
                 stage = row[["ZP", "WP"]].mean()
             elif isinstance(stage, str):
                 stage = stage.replace(".", "_")
             elif stage.isna():
                 continue
-        cond = row["area"] / cbot
+        if delange:
+            cond = row["cond"]
+        else:
+            cond = row["area"] / cbot
         # rbot = row["BL"] if row["BL"] < stage else stage - 1.0
 
         for nlay in layers:
