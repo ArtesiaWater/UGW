@@ -8,13 +8,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import xarray as xr
+import rasterio
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from tqdm import tqdm
 import flopy as fp  # latest develop branch
 
 # import modules from NHFLO repo (for now)
 sys.path.insert(2, "../../../../NHFLO/NHFLOPY")
-from modules import mgrid, mtime, subsurface, util, rws, surface_water
+from modules import mgrid, mtime, subsurface, util, rws, surface_water, ahn
 from utils import de_lange
 
 start = default_timer()
@@ -167,6 +168,40 @@ model_ds = subsurface.add_kh_kv_from_regis_to_dataset(regis_ds,
                                                       anisotropy,
                                                       fill_value_kh,
                                                       fill_value_kv)
+
+# %% Add information about the surface level (also bathymetry)
+# add the surface level of each grid cell
+model_ds['area'] = (('y', 'x'), mgrid.get_surface_area(gwf))
+
+# get the minimum ahn level in each cell
+ahn_fname = ahn.get_ahn_within_extent(model_ds.attrs['extent'],
+                                      return_fname=True)
+resampling = rasterio.enums.Resampling.min
+model_ds['ahn_min'] = mgrid.raster_to_quadtree_grid(ahn_fname, model_ds,
+                                                    resampling=resampling)
+resampling = rasterio.enums.Resampling.mean
+model_ds['ahn_mean'] = mgrid.raster_to_quadtree_grid(ahn_fname, model_ds,
+                                                     resampling=resampling)
+resampling = rasterio.enums.Resampling.mean
+model_ds['ahn_max'] = mgrid.raster_to_quadtree_grid(ahn_fname, model_ds,
+                                                    resampling=resampling)
+
+# read Bathymetry of river data
+fname = os.path.join(datadir, 'Bathymetry', 'bathymetry_masks.shp')
+bathshp = gpd.read_file(fname)
+extent_polygon = surface_water.extent2polygon(model_ds.attrs['extent'])
+mask = bathshp.intersects(extent_polygon)
+bathshp = bathshp[mask]
+bath = xr.full_like(model_ds['top'], np.NaN)
+for file in bathshp['FILE']:
+    fname = os.path.join(datadir, file.replace('..\\data\\sources\\', ''))
+    # get the minimum bathemetry-level in each cell
+    resampling = rasterio.enums.Resampling.min
+    zt = mgrid.raster_to_quadtree_grid(fname, model_ds, resampling=resampling)
+    # update bath when zt is lower
+    bath = bath.where(np.isnan(zt) | (bath < zt), zt)
+# apparently bathemetry is in mm (need to check if this is always the case)
+model_ds['bathymetry'] = bath = bath / 1000.
 
 # %% DIS
 

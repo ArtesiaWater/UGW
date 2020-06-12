@@ -50,3 +50,5 @@ with zipfile.ZipFile(fname, 'r') as zip_ref:
 # bathiemetry
 fname = os.path.join(datadir,'Bathymetry.zip')
 util.download_file_from_google_drive('1k0O6FiOpsjy8-wA0cVgLzuNmAYBwz4IX', fname)
+with zipfile.ZipFile(fname, 'r') as zip_ref:
+    zip_ref.extractall(datadir)
