@@ -1,5 +1,6 @@
 import sys
 import os
+import warnings
 from timeit import default_timer
 
 import geopandas as gpd
@@ -295,7 +296,7 @@ if riv_method == "aggregated":
                 lowest_rbot = lowest_lvl - 0.5
         mdata.loc[igr, "BL"] = lowest_rbot
 
-        # estimate length from polygon
+        # estimate length from polygon (for shapefactor > 4)
         shape_factor = idf.length / np.sqrt(idf.area)
         len_est1 = (
             idf.length - np.sqrt(idf.length**2 - 16 * idf.area)) / 4
@@ -303,13 +304,14 @@ if riv_method == "aggregated":
             idf.length + np.sqrt(idf.length**2 - 16 * idf.area)) / 4
         len_est = pd.concat([len_est1, len_est2], axis=1).max(axis=1)
 
-        # estimate length from minimum rotated rectangle
+        # estimate length from minimum rotated rectangle (for shapefactor < 4)
         min_rect = idf.geometry.apply(lambda g: g.minimum_rotated_rectangle)
         xy = min_rect.apply(lambda g: np.sqrt(
             (np.array(g.exterior.xy[0]) - np.array(g.exterior.xy[0][0]))**2 +
             (np.array(g.exterior.xy[1]) - np.array(g.exterior.xy[1][0]))**2))
         len_est3 = xy.apply(lambda a: np.partition(a.flatten(), -2)[-2])
-        # update where shape factor is lower than 4
+        
+        # update length estimate where shape factor is lower than 4
         len_est.loc[shape_factor < 4] = len_est3.loc[shape_factor < 4]
 
         mdata.loc[igr, "len_estimate"] = len_est.sum()
@@ -334,6 +336,8 @@ if riv_method == "aggregated":
         N = 1e-3  # recharge
 
         pstar, cstar, cond = de_lange(A, H0, kv, kh, c1, li, B, c0, p, N)
+        if cond < 0 :
+            warnings.warn("Calculated conductance (De Lange) is < 0!")
         mdata.loc[igr, "pstar"] = pstar
         mdata.loc[igr, "cstar"] = cstar
         mdata.loc[igr, "cond"] = cond
