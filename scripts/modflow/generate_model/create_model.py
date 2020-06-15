@@ -169,39 +169,6 @@ model_ds = subsurface.add_kh_kv_from_regis_to_dataset(regis_ds,
                                                       fill_value_kh,
                                                       fill_value_kv)
 
-# %% Add information about the surface level (also bathymetry)
-# add the surface level of each grid cell
-model_ds['area'] = (('y', 'x'), mgrid.get_surface_area(gwf))
-
-# get the minimum ahn level in each cell
-ahn_fname = ahn.get_ahn_within_extent(model_ds.attrs['extent'],
-                                      return_fname=True)
-resampling = rasterio.enums.Resampling.min
-model_ds['ahn_min'] = mgrid.raster_to_quadtree_grid(ahn_fname, model_ds,
-                                                    resampling=resampling)
-resampling = rasterio.enums.Resampling.mean
-model_ds['ahn_mean'] = mgrid.raster_to_quadtree_grid(ahn_fname, model_ds,
-                                                     resampling=resampling)
-resampling = rasterio.enums.Resampling.mean
-model_ds['ahn_max'] = mgrid.raster_to_quadtree_grid(ahn_fname, model_ds,
-                                                    resampling=resampling)
-
-# read Bathymetry of river data
-fname = os.path.join(datadir, 'Bathymetry', 'bathymetry_masks.shp')
-bathshp = gpd.read_file(fname)
-extent_polygon = surface_water.extent2polygon(model_ds.attrs['extent'])
-mask = bathshp.intersects(extent_polygon)
-bathshp = bathshp[mask]
-bath = xr.full_like(model_ds['top'], np.NaN)
-for file in bathshp['FILE']:
-    fname = os.path.join(datadir, file.replace('..\\data\\sources\\', ''))
-    # get the minimum bathemetry-level in each cell
-    resampling = rasterio.enums.Resampling.min
-    zt = mgrid.raster_to_quadtree_grid(fname, model_ds, resampling=resampling)
-    # update bath when zt is lower
-    bath = bath.where(np.isnan(zt) | (bath < zt), zt)
-# apparently bathemetry is in mm (need to check if this is always the case)
-model_ds['bathymetry'] = bath = bath / 1000.
 
 # %% DIS
 
@@ -229,6 +196,40 @@ dis = fp.mf6.ModflowGwfdis(gwf,
                            botm=model_ds['bot'].data,
                            idomain=model_ds['idomain'].data,
                            filename='{}.dis'.format(model_name))
+
+# %% Add information about the surface level (also bathymetry)
+# add the surface level of each grid cell
+model_ds['area'] = (('y', 'x'), mgrid.get_surface_area(gwf))
+
+# get the minimum ahn level in each cell
+ahn_fname = ahn.get_ahn_within_extent(model_ds.attrs['extent'],
+                                      return_fname=True)
+resampling = rasterio.enums.Resampling.min
+model_ds['ahn_min'] = mgrid.raster_to_quadtree_grid(ahn_fname, model_ds,
+                                                    resampling=resampling)
+resampling = rasterio.enums.Resampling.average
+model_ds['ahn_average'] = mgrid.raster_to_quadtree_grid(ahn_fname, model_ds,
+                                                     resampling=resampling)
+resampling = rasterio.enums.Resampling.max
+model_ds['ahn_max'] = mgrid.raster_to_quadtree_grid(ahn_fname, model_ds,
+                                                    resampling=resampling)
+
+# read Bathymetry of river data
+fname = os.path.join(datadir, 'Bathymetry', 'bathymetry_masks.shp')
+bathshp = gpd.read_file(fname)
+extent_polygon = surface_water.extent2polygon(model_ds.attrs['extent'])
+mask = bathshp.intersects(extent_polygon)
+bathshp = bathshp[mask]
+bath = xr.full_like(model_ds['top'], np.NaN)
+for file in bathshp['FILE']:
+    fname = os.path.join(datadir, file.replace('..\\data\\sources\\', ''))
+    # get the minimum bathemetry-level in each cell
+    resampling = rasterio.enums.Resampling.min
+    zt = mgrid.raster_to_quadtree_grid(fname, model_ds, resampling=resampling)
+    # update bath when zt is lower
+    bath = bath.where(np.isnan(zt) | (bath < zt), zt)
+# apparently bathemetry is in mm (need to check if this is always the case)
+model_ds['bathymetry'] = bath = bath / 1000.
 
 # %% NPF
 npf = fp.mf6.ModflowGwfnpf(gwf,
