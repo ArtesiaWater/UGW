@@ -209,7 +209,7 @@ model_ds['ahn_min'] = mgrid.raster_to_quadtree_grid(ahn_fname, model_ds,
                                                     resampling=resampling)
 resampling = rasterio.enums.Resampling.average
 model_ds['ahn_average'] = mgrid.raster_to_quadtree_grid(ahn_fname, model_ds,
-                                                     resampling=resampling)
+                                                        resampling=resampling)
 resampling = rasterio.enums.Resampling.max
 model_ds['ahn_max'] = mgrid.raster_to_quadtree_grid(ahn_fname, model_ds,
                                                     resampling=resampling)
@@ -382,19 +382,8 @@ if riv_method == "aggregated":
     cbot = 1.0  # bottom resistance, days
 
     for cellid, row in mdata.iterrows():
-
         rbot = row["BL"]
-        laytop = model_ds.top.isel(x=cellid[1], y=cellid[0])
-        laybot = model_ds.bot.isel(x=cellid[1], y=cellid[0])
-
-        layers = []
-        if laytop.data < rbot:
-            layers = [0]  # weirdness, rbot above top of model
-        else:
-            layers = [0]
-        if (laybot.data > rbot).sum() > 0:
-            layers += list(range(1, (laybot.data > rbot).sum() + 1))
-
+        
         if steady_state:
             stage = row[["ZP", "WP"]].mean()  # mean level summer/winter
         else:
@@ -413,9 +402,15 @@ if riv_method == "aggregated":
         else:
             cond = row["area"] / cbot
         # rbot = row["BL"] if row["BL"] < stage else stage - 1.0
-
-        for nlay in layers:
-            cid = (nlay,) + cellid
+        lays, conds = surface_water.distribute_cond_over_lays(cond,
+                                                              cellid,
+                                                              rbot,
+                                                              model_ds.top,
+                                                              model_ds.bot,
+                                                              model_ds.idomain,
+                                                              model_ds.kh)
+        for lay, cond in zip(lays, conds):
+            cid = (lay,) + cellid
             spd.append([cid, stage, cond, rbot])
 
 elif riv_method == "individual":
@@ -448,8 +443,6 @@ elif riv_method == "individual":
     spd = []
     cbot = 1.0
     for i, row in sfw_grid.iterrows():
-
-        cid = (0,) + row["cellids"]
         if steady_state:
             stage = row[["ZP", "WP"]].mean()  # mean level summer/winter
         else:
@@ -457,8 +450,16 @@ elif riv_method == "individual":
         cond = row["areas"] / cbot
         rbot = row["BL"] if row["BL"] < row["WP"] else row["WP"] - 1.0
         name = row["name"].replace(" ", "_")
-
-        spd.append([cid, stage, cond, rbot, name])
+        lays, conds = surface_water.distribute_cond_over_lays(cond,
+                                                              row["cellids"],
+                                                              rbot,
+                                                              model_ds.top,
+                                                              model_ds.bot,
+                                                              model_ds.idomain,
+                                                              model_ds.kh)
+        for lay, cond in zip (lays, conds):
+            cid = (lay,) + row["cellids"]
+            spd.append([cid, stage, cond, rbot, name])
 
 else:
     raise ValueError(
@@ -564,9 +565,8 @@ if not os.path.isfile(fname):
     surface_water.request_waterinfo_waterlevels(riv2stn, '<mail_adress>',
                                                 tmin=model_ds.time.values[0],
                                                 tmax=model_ds.time.values[-1])
-surface_water.waterinfo_to_ghb(fname, riv2stn, gdfv, gwf, gdfl=gdfl,
-                               steady_start=steady_start,
-                               intersect_method="vertex")
+model_ds['bathymetry'] = model_ds['bathymetry'].fillna(model_ds['ahn_min'])
+surface_water.waterinfo_to_ghb(fname, riv2stn, gdfv, gwf, model_ds, gdfl=gdfl)
 
 # %% OC
 
