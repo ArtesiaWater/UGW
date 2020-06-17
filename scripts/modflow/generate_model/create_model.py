@@ -609,7 +609,7 @@ spdis = cbc.get_data(text="SPDIS")
 qriv = cbc.get_data(kstpkper=(0, 0), text="RIV")[0]
 qriv3D = cbc.create3D(qriv, 1, gwf.modelgrid.nrow, gwf.modelgrid.ncol)
 qghb = cbc.get_data(kstpkper=(0, 0), text="GHB")[0]
-qghb3D = cbc.create3D(qghb, 1, gwf.modelgrid.nrow, gwf.modelgrid.ncol)
+qghb3D = cbc.create3D(qghb, gwf.modelgrid.nlay, gwf.modelgrid.nrow, gwf.modelgrid.ncol)[0]
 
 q3D = qriv3D.data + qghb3D.data
 
