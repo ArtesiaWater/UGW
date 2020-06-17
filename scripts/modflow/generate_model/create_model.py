@@ -302,11 +302,11 @@ if mask.sum() > 0:
     print("... setting RBOT 1 m below lowest water level")
     sfw.loc[mask, "BL"] = (sfw.loc[mask, ["ZP", "WP"]].min() - 1.0).values
 
-# aggregated
-if riv_method == "aggregated":
+# cut geodataframe by the grid  (no caching yet)
+sfw_grid = surface_water.gdf2grid(sfw, gwf, method="vertex")
 
+if riv_method == "aggregated":
     boundnames = False
-    sfw_grid = surface_water.gdf2grid(sfw, gwf, method="vertex")
 
     # Post process intersection result
     gr = sfw_grid.groupby(by="cellid")
@@ -415,50 +415,27 @@ if riv_method == "aggregated":
 
 elif riv_method == "individual":
     boundnames = True
+    sfw_grid.loc[sfw_grid['name'].isna(),'name'] = ''
 
-    # intersection
-    ix = fp.utils.GridIntersect(gwf.modelgrid, method="vertex")
-
-    # intersect with modelgrid and store attributes
-    keep_cols = ["CAT", "Z", "ZP", "WP", "BL", "BB", "src_id_wla"]
-    collect_ix = []
-    for irow, ishp in tqdm(iterable=sfw.iterrows(), total=sfw.index.size):
-        r = ix.intersect_polygon(ishp.geometry)
-        idf = gpd.GeoDataFrame(r, geometry="ixshapes")
-        # add attributes
-        for icol in keep_cols:
-            idf[icol] = ishp[icol]
-            idf["ishp"] = irow  # id to original shape
-        if ishp["name"] is not None:
-            idf["name"] = ishp["name"]
-        else:
-            idf["name"] = ""
-        collect_ix.append(idf)
-
-    sfw_grid = pd.concat(collect_ix, axis=0)
-    sfw_grid = sfw_grid.reset_index(drop=True).astype({"BL": np.float,
-                                                       "BB": np.float})
-
-    # individual method
     spd = []
     cbot = 1.0
-    for i, row in sfw_grid.iterrows():
+    for row in tqdm(sfw_grid.itertuples(), total=sfw_grid.shape[0]):
         if steady_state:
-            stage = row[["ZP", "WP"]].mean()  # mean level summer/winter
+            stage = (row.ZP + row.WP)/2  # mean level summer/winter
         else:
-            stage = row["src_id_wla"]
-        cond = row["areas"] / cbot
-        rbot = row["BL"] if row["BL"] < row["WP"] else row["WP"] - 1.0
-        name = row["name"].replace(" ", "_")
+            stage = row.src_id_wla.replace(".", "_")
+        cond = row.geometry.area / cbot
+        rbot = row.BL if row.BL < row.WP else row.WP - 1.0
+        name = row.name.replace(" ", "_")
         lays, conds = surface_water.distribute_cond_over_lays(cond,
-                                                              row["cellids"],
+                                                              row.cellid,
                                                               rbot,
                                                               model_ds.top,
                                                               model_ds.bot,
                                                               model_ds.idomain,
                                                               model_ds.kh)
         for lay, cond in zip (lays, conds):
-            cid = (lay,) + row["cellids"]
+            cid = (lay,) + row.cellid
             spd.append([cid, stage, cond, rbot, name])
 
 else:
