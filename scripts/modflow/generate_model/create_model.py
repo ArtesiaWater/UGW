@@ -383,7 +383,7 @@ if riv_method == "aggregated":
 
     for cellid, row in mdata.iterrows():
         rbot = row["BL"]
-        
+
         if steady_state:
             stage = row[["ZP", "WP"]].mean()  # mean level summer/winter
         else:
@@ -415,7 +415,7 @@ if riv_method == "aggregated":
 
 elif riv_method == "individual":
     boundnames = True
-    sfw_grid.loc[sfw_grid['name'].isna(),'name'] = ''
+    sfw_grid.loc[sfw_grid['name'].isna(), 'name'] = ''
 
     spd = []
     cbot = 1.0
@@ -434,7 +434,7 @@ elif riv_method == "individual":
                                                               model_ds.bot,
                                                               model_ds.idomain,
                                                               model_ds.kh)
-        for lay, cond in zip (lays, conds):
+        for lay, cond in zip(lays, conds):
             cid = (lay,) + row.cellid
             spd.append([cid, stage, cond, rbot, name])
 
@@ -586,7 +586,8 @@ spdis = cbc.get_data(text="SPDIS")
 qriv = cbc.get_data(kstpkper=(0, 0), text="RIV")[0]
 qriv3D = cbc.create3D(qriv, 1, gwf.modelgrid.nrow, gwf.modelgrid.ncol)
 qghb = cbc.get_data(kstpkper=(0, 0), text="GHB")[0]
-qghb3D = cbc.create3D(qghb, gwf.modelgrid.nlay, gwf.modelgrid.nrow, gwf.modelgrid.ncol)[0]
+qghb3D = cbc.create3D(qghb, gwf.modelgrid.nlay, gwf.modelgrid.nrow,
+                      gwf.modelgrid.ncol)[0]
 
 q3D = qriv3D.data + qghb3D.data
 
