@@ -21,11 +21,13 @@ from utils import de_lange
 
 start = default_timer()
 
+mpl.interactive(True)
+
 # %% Model settings
 
 use_cache = True
-model_ws = r'../../model/test003'
-model_name = 'test003'
+model_ws = r'../../model/schoonhoven'
+model_name = 'schoonhoven'
 
 # method
 riv_method = "aggregated"
@@ -210,7 +212,7 @@ model_ds['ahn_min'] = mgrid.raster_to_quadtree_grid(ahn_fname, model_ds,
                                                     resampling=resampling)
 resampling = rasterio.enums.Resampling.average
 model_ds['ahn_average'] = mgrid.raster_to_quadtree_grid(ahn_fname, model_ds,
-                                                     resampling=resampling)
+                                                        resampling=resampling)
 resampling = rasterio.enums.Resampling.max
 model_ds['ahn_max'] = mgrid.raster_to_quadtree_grid(ahn_fname, model_ds,
                                                     resampling=resampling)
@@ -218,12 +220,14 @@ model_ds['ahn_max'] = mgrid.raster_to_quadtree_grid(ahn_fname, model_ds,
 # read Bathymetry of river data
 fname = os.path.join(datadir, 'Bathymetry', 'bathymetry_masks.shp')
 bathshp = gpd.read_file(fname)
+bathshp["FILE"] = bathshp["FILE"].apply(lambda fp: fp.replace(
+    "\\", "/") if isinstance(fp, str) else None)
 extent_polygon = surface_water.extent2polygon(model_ds.attrs['extent'])
 mask = bathshp.intersects(extent_polygon)
 bathshp = bathshp[mask]
 bath = xr.full_like(model_ds['top'], np.NaN)
 for file in bathshp['FILE']:
-    fname = os.path.join(datadir, file.replace('..\\data\\sources\\', ''))
+    fname = os.path.join(datadir, file.replace('../data/sources/', ''))
     # get the minimum bathemetry-level in each cell
     resampling = rasterio.enums.Resampling.min
     zt = mgrid.raster_to_quadtree_grid(fname, model_ds, resampling=resampling)
@@ -290,9 +294,9 @@ rch = fp.mf6.ModflowGwfrcha(gwf,
 
 # %% RIV
 
-mask_bathymetry = ((sfw.admin != "RWS") &
-                   (sfw.src_id_wla != "NL.9.Lek") &
-                   (sfw.src_id_wla != "NL.39.Lek") &
+mask_bathymetry = (~sfw.has_bath &
+                   ~sfw.has_slope &
+                   (sfw.admin != "RWS") &
                    (~sfw.src_id_wla.isna()))
 sfw = sfw.loc[mask_bathymetry]
 
@@ -301,7 +305,7 @@ mask = (sfw["BL"] > sfw[["ZP", "WP"]].min(axis=1))
 if mask.sum() > 0:
     print(f"Warning! RBOT above waterlevel in {mask.sum()} cases!")
     print("... setting RBOT 1 m below lowest water level")
-    sfw.loc[mask, "BL"] = (sfw.loc[mask, ["ZP", "WP"]].min() - 1.0).values
+    sfw.loc[mask, "BL"] = (sfw.loc[mask, ["ZP", "WP"]].min(axis=1) - 1.0).values
 
 # aggregated
 if riv_method == "aggregated":
@@ -346,7 +350,7 @@ if riv_method == "aggregated":
             (np.array(g.exterior.xy[0]) - np.array(g.exterior.xy[0][0]))**2 +
             (np.array(g.exterior.xy[1]) - np.array(g.exterior.xy[1][0]))**2))
         len_est3 = xy.apply(lambda a: np.partition(a.flatten(), -2)[-2])
-        
+
         # update length estimate where shape factor is lower than 4
         len_est.loc[shape_factor < 4] = len_est3.loc[shape_factor < 4]
 
@@ -372,7 +376,7 @@ if riv_method == "aggregated":
         N = 1e-3  # recharge
 
         pstar, cstar, cond = de_lange(A, H0, kv, kh, c1, li, B, c0, p, N)
-        if cond < 0 :
+        if cond < 0:
             warnings.warn("Calculated conductance (De Lange) is < 0!")
         mdata.loc[igr, "pstar"] = pstar
         mdata.loc[igr, "cstar"] = cstar
@@ -417,6 +421,13 @@ if riv_method == "aggregated":
         else:
             cond = row["area"] / cbot
         # rbot = row["BL"] if row["BL"] < stage else stage - 1.0
+
+        if np.isnan(cond):
+            continue
+            # raise ValueError()
+        if np.isnan(rbot):
+            continue
+            # raise ValueError()
 
         for nlay in layers:
             cid = (nlay,) + cellid
@@ -597,7 +608,6 @@ print("Model ran successfully:", success)
 
 # %% plot riv
 
-
 mpl.interactive(True)
 
 # open head file
@@ -666,6 +676,59 @@ cbar = plt.colorbar(qm, cax=cax)
 cbar.set_label("Kwel/Infiltratie (mm/d)")
 fig.savefig(os.path.join(figdir, "river_leakage.png"),
             bbox_inches="tight", dpi=150)
+
+# %% compare to obs
+
+# import hydropandas as hpd
+# oc_dino = hpd.ObsCollection.from_dino(extent=extent, verbose=True)
+# oc_dino.to_pickle(os.path.join(cachedir, 'oc_dino.pklz'))
+
+oc_dino = pd.read_pickle(os.path.join(cachedir, 'oc_dino.pklz'))
+oc_dino[['start_date', 'end_date']] = oc_dino.stats.get_first_last_obs_date()
+oc_dino = oc_dino[oc_dino['end_date'] > model_ds.time[0].data]
+oc_dino['modellayer'] = oc_dino.gwobs.get_modellayers(gwf, verbose=False)
+
+for i, row in oc_dino.iterrows():
+    x = row['x']
+    y = row['y']
+
+    lay = row['modellayer']
+    if np.isnan(lay):
+        continue
+
+    # get observations in model period
+    obs_plot = row['obs'].loc[model_ds.time.data[0]:model_ds.time.data[-1],
+                              'stand_m_tov_nap']
+    obs_plot.columns = [i]
+
+    # plot if there are any observations
+    if not obs_plot.empty:
+        if ((obs_plot.index[-1] > model_ds.time.data[0]) and
+                (obs_plot.index[0] < model_ds.time.data[-1])):
+
+            # create figure
+            fig, ax = plt.subplots(figsize=(12, 6))
+
+            # get model heads
+            idx = gwf.modelgrid.intersect(x, y)
+            hds_idx = [hds.get_data(totim=tim, mflay=lay)[idx] for
+                       tim in hds.times]
+            hds_df = pd.DataFrame(index=pd.to_datetime(model_ds.time.data),
+                                  data={f'model head lay {lay}': hds_idx})
+
+            # plot heads
+            hds_df.plot(ax=ax, marker='o', lw=0.2, x_compat=True)
+
+            # plot obs
+            obs_day = obs_plot.groupby(obs_plot.index).mean()
+            obs_day.plot(ax=ax, marker='.', lw=1.0, markersize=5,
+                         label=i, x_compat=True)
+
+            # set axes
+            ax.set_xlim(model_ds.time.data[0], model_ds.time.data[-1])
+            ax.legend(loc=2)
+            ax.grid(b=True)
+            ax.set_ylabel("Stijghoogte (m NAP)")
 
 # %%
 end = default_timer()
