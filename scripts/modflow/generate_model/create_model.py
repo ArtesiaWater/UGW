@@ -12,7 +12,8 @@ import xarray as xr
 import rasterio
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from tqdm import tqdm
-import flopy as fp  # latest develop branch
+
+import flopy as fp
 
 # import modules from NHFLO repo (for now)
 sys.path.insert(2, "../../../../NHFLO/NHFLOPY")
@@ -26,17 +27,28 @@ mpl.interactive(True)
 # %% Model settings
 
 use_cache = True
-model_ws = r'../../model/schoonhoven'
-model_name = 'schoonhoven'
+model_ws = '../../model/ugw'
+model_name = 'ugw'
 
 # method
 riv_method = "aggregated"
 delange = True
 
+# grid
+delr = 500.            # zelfde als dx
+delc = 500.            # zelfde als dy
+angrot = 0            # nog niet geimplementeerd
+
 # geef hier paths op
-datadir = r'../../../data'
+datadir = '../../../data'
 figdir = os.path.join(model_ws, 'figure')
 cachedir = os.path.join(model_ws, 'cache')
+
+# files
+regis_nc = 'regis_ugw.nc'
+dinofile = os.path.join(datadir, 'oc_dino_heel_gebied.pklz')
+water_shp = os.path.join(datadir, "modflow_sfw_heel_gebied", "waterareas.shp")
+rivobs_fname = os.path.join(datadir, '20200624_009.zip')
 
 # verander dit niet
 if not os.path.exists(model_ws):
@@ -48,10 +60,13 @@ if not os.path.exists(figdir):
 if not os.path.exists(cachedir):
     os.mkdir(cachedir)
 
+f = open(os.path.join(model_ws, "ugw_log.txt"), "w")
+
 # %% Shapefile (for RIV and extent)
 # read shapefile
-water_shp = os.path.join(datadir, "modflow_sfw_schoonhoven", "waterareas.shp")
 sfw = gpd.read_file(water_shp)
+mask = sfw["geometry"].apply(lambda geom: geom.wkb)
+sfw = sfw.loc[mask.drop_duplicates().index]
 
 # %% Time discretization
 # general
@@ -78,8 +93,8 @@ model_ds = mtime.get_model_ds_time(start_time=start_time,
                                    nstp=nstp,
                                    tsmult=tsmult)
 
-tdis_perioddata = [(model_ds.perlen, model_ds.nstp,
-                    model_ds.tsmult)] * model_ds.nper
+tdis_perioddata = [(model_ds.perlen[i], model_ds.nstp,
+                    model_ds.tsmult) for i in range(model_ds.nper)]
 
 # %% SIM
 # Create the Flopy simulation object
@@ -109,22 +124,16 @@ ims = fp.mf6.ModflowIms(sim,
 
 # %% Define modflow grid
 
-# extent = (111900.0, 116450.0, 442700.0, 447450.0)
-# extent = (112000.0, 115200.0, 444800.0, 447000.0)
 bounds = sfw.geometry.total_bounds
 extent = (bounds[0], bounds[2], bounds[1], bounds[3])
 
-# geef hier waarden op
-delr = 50.            # zelfde als dx
-delc = 50.            # zelfde als dy
-angrot = 0            # nog niet geimplementeerd
 length_units = 'METERS'
 
 # redefine extent, nrow & ncol (fit to regis)
 extent, nrow, ncol = mgrid.fit_extent_to_regis(list(extent), delr, delc)
 
 # get regis dataset
-regis_path = os.path.join(datadir, 'regis_ugw_test2.nc')
+regis_path = os.path.join(datadir, regis_nc)
 regis_ds_raw = xr.open_dataset(regis_path).sel(x=slice(extent[0], extent[1]),
                                                y=slice(extent[2], extent[3]))
 
@@ -141,7 +150,7 @@ regis_ds = util.get_regis_dataset(gridtype='structured',
                                   delc=delc,
                                   interp_method="nearest",
                                   cachedir=cachedir,
-                                  fname_netcdf='regis_ugw_test2.nc',
+                                  fname_netcdf=regis_nc,
                                   use_cache=use_cache)
 
 # %% get model_ds, add idomain, top & bot
@@ -268,17 +277,17 @@ if not model_ds.steady_state:
                                transient=trn_spd)
 
 # %% IC
-starting_head = 1.0
+starting_head = model_ds["top"].data
 
 # Create the initial conditions array
 layer_store_type = [
-    fp.mf6.data.mfdatastorage.DataStorageType.internal_constant
+    fp.mf6.data.mfdatastorage.DataStorageType.internal_array
 ]
 
 starting_head = fp.mf6.ModflowGwfic.strt.empty(gwf,
                                                layered=False,
                                                data_storage_type_list=layer_store_type,
-                                               default_value=1.0)
+                                               default_value=starting_head)
 
 # Create IC package
 ic = fp.mf6.ModflowGwfic(gwf,
@@ -305,25 +314,28 @@ mask = (sfw["BL"] > sfw[["ZP", "WP"]].min(axis=1))
 if mask.sum() > 0:
     print(f"Warning! RBOT above waterlevel in {mask.sum()} cases!")
     print("... setting RBOT 1 m below lowest water level")
-    sfw.loc[mask, "BL"] = (sfw.loc[mask, ["ZP", "WP"]].min(axis=1) - 1.0).values
+    sfw.loc[mask, "BL"] = (sfw.loc[mask, ["ZP", "WP"]].min() - 1.0).values
 
 # cut geodataframe by the grid  (no caching yet)
 sfw_grid = surface_water.gdf2grid(sfw, gwf, method="vertex")
 
 if riv_method == "aggregated":
+
     boundnames = False
 
     # Post process intersection result
     gr = sfw_grid.groupby(by="cellid")
     calc_cols = ["ZP", "WP"]
     mdata = pd.DataFrame(index=gr.groups.keys())
-    for igr, group in tqdm(gr):
+
+    for igr, group in tqdm(gr, desc="Aggregating RIV data"):
         idf = group
 
         for icol in calc_cols:
             # area-weighted
-            mdata.loc[igr, icol] = \
-                (idf.area * idf[icol]).sum(skipna=False) / idf.area.sum()
+            nanmask = idf[icol].isna()
+            mdata.loc[igr, icol] = ((idf.area * idf[icol]).sum(skipna=True) /
+                                    idf.loc[~nanmask].area.sum())
 
         # lowest rbot
         lowest_rbot = idf["BL"].min()
@@ -364,7 +376,9 @@ if riv_method == "aggregated":
         laybot = model_ds.bot.isel(x=igr[1], y=igr[0])
 
         A = model_ds.delr * model_ds.delc  # cell area
-        H0 = laytop.data - laybot.data[0]  # layer thickness
+        # H0 = laytop.data - laybot.data[0]  # layer thickness
+        rbot = mdata.loc[igr, "BL"].min()
+        H0 = laytop.data - laybot.data[laybot.data < rbot][0]  # layer thickn.
         kv = model_ds['kv'].data[0, igr[0], igr[1]]
         kh = model_ds['kh'].data[0, igr[0], igr[1]]
         c1 = 0.0  # resistance between phreatic layer and regional aquifer
@@ -376,8 +390,8 @@ if riv_method == "aggregated":
         N = 1e-3  # recharge
 
         pstar, cstar, cond = de_lange(A, H0, kv, kh, c1, li, B, c0, p, N)
-        if cond < 0:
-            warnings.warn("Calculated conductance (De Lange) is < 0!")
+        # if cond < 0:
+        #     warnings.warn("Calculated conductance (De Lange) is < 0!")
         mdata.loc[igr, "pstar"] = pstar
         mdata.loc[igr, "cstar"] = cstar
         mdata.loc[igr, "cond"] = cond
@@ -389,8 +403,23 @@ if riv_method == "aggregated":
     spd = []
     cbot = 1.0  # bottom resistance, days
 
-    for cellid, row in mdata.iterrows():
+    for cellid, row in tqdm(mdata.iterrows(), total=mdata.index.size,
+                            desc="Building RIV spd"):
+
         rbot = row["BL"]
+        laytop = model_ds.top.isel(x=cellid[1], y=cellid[0])
+        laybot = model_ds.bot.isel(x=cellid[1], y=cellid[0])
+        idomain = model_ds.idomain.isel(x=cellid[1], y=cellid[0])
+
+        layers = []
+        if laytop.data < rbot:
+            # rbot above top of model, use first active layer
+            layers = [np.where(idomain == 1)[0][0]]
+        else:
+            layers = []
+            for j in range((laybot.data > rbot).sum() + 1):
+                if idomain.data[j] > 0:
+                    layers.append(j)
 
         if steady_state:
             stage = row[["ZP", "WP"]].mean()  # mean level summer/winter
@@ -402,14 +431,28 @@ if riv_method == "aggregated":
                 # else:
                 stage = row[["ZP", "WP"]].mean()
             elif isinstance(stage, str):
-                stage = stage.replace(".", "_")
+                stage = (stage.replace(".", "_")
+                         .replace(" ", "_")
+                         .replace("/", "_"))
             elif stage.isna():
-                continue
+                pass
+                # continue
         if delange:
             cond = row["cond"]
         else:
             cond = row["area"] / cbot
+
+        if np.isnan(cond):
+            print(f"{cellid}: Conductance is NaN! Info: area={row.area:.2f} "
+                  f"len={row.len_estimate:.2f}, BL={row.BL}", file=f)
+            continue
+        if cond < 0:
+            print(f"{cellid}, Conductance is < 0!, area={row.area:.2f}, "
+                  f"len={row.len_estimate:.2f}, BL={row.BL}", file=f)
+            continue
         # rbot = row["BL"] if row["BL"] < stage else stage - 1.0
+        # if cond < 0:
+        #     cond = 0.0
         lays, conds = surface_water.distribute_cond_over_lays(cond,
                                                               cellid,
                                                               rbot,
@@ -427,12 +470,16 @@ elif riv_method == "individual":
 
     spd = []
     cbot = 1.0
-    for row in tqdm(sfw_grid.itertuples(), total=sfw_grid.shape[0]):
+    for row in tqdm(sfw_grid.itertuples(), total=sfw_grid.shape[0],
+                    desc="Building RIV spd"):
         if steady_state:
-            stage = (row.ZP + row.WP)/2  # mean level summer/winter
+            stage = (row.ZP + row.WP) / 2  # mean level summer/winter
         else:
-            stage = row.src_id_wla.replace(".", "_")
+            stage = (row.src_id_wla.replace(".", "_")
+                     .replace(" ", "_")
+                     .replace("/", "_"))
         cond = row.geometry.area / cbot
+
         rbot = row.BL if row.BL < row.WP else row.WP - 1.0
         name = row.name.replace(" ", "_")
         lays, conds = surface_water.distribute_cond_over_lays(cond,
@@ -442,10 +489,19 @@ elif riv_method == "individual":
                                                               model_ds.bot,
                                                               model_ds.idomain,
                                                               model_ds.kh)
+
+        if np.any(np.isnan(conds)):
+            print(f"{row.cellid}: Conductance is NaN! Info: area={row.area:.2f} "
+                  f"len={row.len_estimate:.2f}, BL={row.BL}", file=f)
+            break
+        if np.any(conds < 0):
+            print(f"{row.cellid}, Conductance is < 0!, area={row.area:.2f}, "
+                  f"len={row.len_estimate:.2f}, BL={row.BL}", file=f)
+            continue
+
         for lay, cond in zip(lays, conds):
             cid = (lay,) + row.cellid
             spd.append([cid, stage, cond, rbot, name])
-
 else:
     raise ValueError(
         f"Invalid method for creating RIV package: '{riv_method}'")
@@ -496,7 +552,9 @@ if not steady_state:
         ts = pd.Series(index=dtnum, dtype=float)
         ts.where(dt.month == 4, peilen.ZP, inplace=True)
         ts.where(dt.month == 10, peilen.WP, inplace=True)
-        ts.name = peilvak.replace(".", "_")
+        ts.name = (peilvak.replace(".", "_")
+                   .replace(" ", "_")
+                   .replace("/", "_"))
         tseries_list.append(ts)
 
     ts0 = tseries_list[0]
@@ -512,8 +570,6 @@ if not steady_state:
                               interpolation_methodrecord='stepwise')
 
 # %% RIV2
-fname = os.path.join(datadir, '20200603_044.zip')
-
 riv2stn = {}
 riv2stn['Amsterdam-Rijnkanaal Betuwepand'] = ['Tiel Kanaal']
 riv2stn['Amsterdam-Rijnkanaal Noordpand'] = ['Amsterdam Surinamekade',
@@ -541,17 +597,28 @@ riv2stn['Randmeren-zuid'] = ['Hollandse brug', 'Nijkerk west']
 riv2stn['Randmeren-oost'] = ['Nijkerk Nuldernauw', 'Elburg']
 
 gdfv = rws.get_river_polygons(extent)
-gdfl = rws.get_river_lines(extent)
-if not os.path.isfile(fname):
+
+try:
+    gdfl = rws.get_river_lines(extent)
+except KeyError as e:
+    print("Could not download river lines!")
+    gdfl = None
+
+if not os.path.isfile(rivobs_fname):
     msg = ('Connot find file {0}. Please run below code (after changing '
            'your e-mail adress) to request data and place requested '
            'file in {0}.')
-    raise(Exception(msg.format(fname)))
-    surface_water.request_waterinfo_waterlevels(riv2stn, '<mail_adress>',
+    raise(Exception(msg.format(rivobs_fname)))
+    mailadres = "d.brakenhoff@artesia-water.nl"
+    surface_water.request_waterinfo_waterlevels(riv2stn, mailadres,
                                                 tmin=model_ds.time.values[0],
                                                 tmax=model_ds.time.values[-1])
 model_ds['bathymetry'] = model_ds['bathymetry'].fillna(model_ds['ahn_min'])
-surface_water.waterinfo_to_ghb(fname, riv2stn, gdfv, gwf, model_ds, gdfl=gdfl)
+surface_water.waterinfo_to_ghb(rivobs_fname, riv2stn, gdfv, gwf, model_ds,
+                               gdfl=gdfl, intersect_method="vertex")
+
+# close log file
+f.close()
 
 # %% OC
 
@@ -576,14 +643,22 @@ sim.write_simulation()
 success, buff = sim.run_simulation()
 print("Model ran successfully:", success)
 
-# %% plot riv
+postmodel = default_timer()
+print(f"Elapsed time up to model solve: {postmodel-start:.1f} s")
 
+if not success:
+    msg = "Model did not run succesfully!"
+    raise Exception(msg)
+
+
+# %% Post-processing
 mpl.interactive(True)
 
 # open head file
 fname = os.path.join(model_ws, headfile)
 hds = fp.utils.HeadFile(fname)
 h = hds.get_data(kstpkper=(0, 0))
+h[h > 1e5] = np.nan
 
 # open budgetfile
 fname = os.path.join(model_ws, budgetfile)
@@ -591,10 +666,11 @@ cbc = fp.utils.CellBudgetFile(fname)
 
 spdis = cbc.get_data(text="SPDIS")
 qriv = cbc.get_data(kstpkper=(0, 0), text="RIV")[0]
-qriv3D = cbc.create3D(qriv, 1, gwf.modelgrid.nrow, gwf.modelgrid.ncol)
+qriv3D = cbc.create3D(qriv, gwf.modelgrid.nlay, gwf.modelgrid.nrow,
+                      gwf.modelgrid.ncol)
 qghb = cbc.get_data(kstpkper=(0, 0), text="GHB")[0]
 qghb3D = cbc.create3D(qghb, gwf.modelgrid.nlay, gwf.modelgrid.nrow,
-                      gwf.modelgrid.ncol)[0]
+                      gwf.modelgrid.ncol)
 
 q3D = qriv3D.data + qghb3D.data
 
@@ -603,6 +679,25 @@ qx, qy, qz = fp.utils.postprocessing.get_specific_discharge(gwf,
                                                             precision="double")
 
 # %% plot heads and flow quiver
+
+# cond = np.zeros((nlay, nrow, ncol), dtype=np.float)
+# elev = np.zeros((nlay, nrow, ncol), dtype=np.float)
+# rbot = np.zeros((nlay, nrow, ncol), dtype=np.float)
+
+# pak = riv
+# for j in range(pak.stress_period_data.array[0].shape[0]):
+#     idx = pak.stress_period_data.array[0].cellid[j]
+#     elev[idx] = pak.stress_period_data.array[0].rbot[j]
+#     cond[idx] = pak.stress_period_data.array[0].cond[j]
+#     rbot[idx] = pak.stress_period_data.array[0].rbot[j]
+
+# for ilay in range(5):
+#     fig, ax = plt.subplots(1, 1, figsize=(14, 10))
+#     mapview = fp.plot.PlotMapView(model=gwf, layer=ilay)
+#     marr = np.ma.masked_equal(cond, 0)
+#     qm = mapview.plot_array(marr)
+#     plt.colorbar(qm, shrink=1.0)
+
 
 fig, ax = plt.subplots(1, 1, figsize=(14, 10))
 mapview = fp.plot.PlotMapView(model=gwf)
@@ -650,57 +745,66 @@ fig.savefig(os.path.join(figdir, "river_leakage.png"),
 
 # %% compare to obs
 
-# import hydropandas as hpd
-# oc_dino = hpd.ObsCollection.from_dino(extent=extent, verbose=True)
-# oc_dino.to_pickle(os.path.join(cachedir, 'oc_dino.pklz'))
+if os.path.isfile(dinofile):
 
-oc_dino = pd.read_pickle(os.path.join(cachedir, 'oc_dino.pklz'))
-oc_dino[['start_date', 'end_date']] = oc_dino.stats.get_first_last_obs_date()
-oc_dino = oc_dino[oc_dino['end_date'] > model_ds.time[0].data]
-oc_dino['modellayer'] = oc_dino.gwobs.get_modellayers(gwf, verbose=False)
+    oc_dino = pd.read_pickle(dinofile)
+    oc_dino[['start_date', 'end_date']
+            ] = oc_dino.stats.get_first_last_obs_date()
+    oc_dino = oc_dino[oc_dino['end_date'] > model_ds.time[0].data]
+    oc_dino.loc[:, 'modellayer'] = oc_dino.gwobs.get_modellayers(
+        gwf, verbose=False)
 
-for i, row in oc_dino.iterrows():
-    x = row['x']
-    y = row['y']
+    counter = 0
+    for i, row in oc_dino.iterrows():
+        x = row['x']
+        y = row['y']
 
-    lay = row['modellayer']
-    if np.isnan(lay):
-        continue
+        lay = row['modellayer']
+        if np.isnan(lay):
+            continue
+        else:
+            lay = int(lay)
 
-    # get observations in model period
-    obs_plot = row['obs'].loc[model_ds.time.data[0]:model_ds.time.data[-1],
-                              'stand_m_tov_nap']
-    obs_plot.columns = [i]
+        # get observations in model period
+        obs_plot = row['obs'].loc[model_ds.time.data[0]:model_ds.time.data[-1],
+                                  'stand_m_tov_nap']
+        obs_plot.columns = [i]
 
-    # plot if there are any observations
-    if not obs_plot.empty:
-        if ((obs_plot.index[-1] > model_ds.time.data[0]) and
-                (obs_plot.index[0] < model_ds.time.data[-1])):
+        if obs_plot.dropna().empty:
+            continue
 
-            # create figure
-            fig, ax = plt.subplots(figsize=(12, 6))
+        # plot if there are any observations
+        if not obs_plot.empty:
+            if ((obs_plot.index[-1] > model_ds.time.data[0]) and
+                    (obs_plot.index[0] < model_ds.time.data[-1])):
 
-            # get model heads
-            idx = gwf.modelgrid.intersect(x, y)
-            hds_idx = [hds.get_data(totim=tim, mflay=lay)[idx] for
-                       tim in hds.times]
-            hds_df = pd.DataFrame(index=pd.to_datetime(model_ds.time.data),
-                                  data={f'model head lay {lay}': hds_idx})
+                # create figure
+                fig, ax = plt.subplots(figsize=(12, 6))
 
-            # plot heads
-            hds_df.plot(ax=ax, marker='o', lw=0.2, x_compat=True)
+                # get model heads
+                idx = gwf.modelgrid.intersect(x, y)
+                hds_idx = hds.get_ts((lay,) + idx)[:, 1]
+                hds_df = pd.DataFrame(index=pd.to_datetime(model_ds.time.data),
+                                      data={f'model head lay {lay}': hds_idx})
 
-            # plot obs
-            obs_day = obs_plot.groupby(obs_plot.index).mean()
-            obs_day.plot(ax=ax, marker='.', lw=1.0, markersize=5,
-                         label=i, x_compat=True)
+                # plot heads
+                hds_df.plot(ax=ax, marker='o', lw=0.2, x_compat=True)
 
-            # set axes
-            ax.set_xlim(model_ds.time.data[0], model_ds.time.data[-1])
-            ax.legend(loc=2)
-            ax.grid(b=True)
-            ax.set_ylabel("Stijghoogte (m NAP)")
+                # plot obs
+                obs_day = obs_plot.groupby(obs_plot.index).mean()
+                obs_day.plot(ax=ax, marker='.', lw=1.0, markersize=5,
+                             label=i, x_compat=True)
 
-# %%
+                # set axes
+                ax.set_xlim(model_ds.time.data[0], model_ds.time.data[-1])
+                ax.legend(loc=2)
+                ax.grid(b=True)
+                ax.set_ylabel("Stijghoogte (m NAP)")
+
+                fig.savefig(os.path.join(figdir, f"model_vs_{i}.png"),
+                            bbox_inches="tight", dpi=150)
+                plt.close(fig)
+
+# %% End script
 end = default_timer()
 print(f"Elapsed time: {end-start:.1f} s")
