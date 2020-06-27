@@ -47,11 +47,11 @@ def de_lange(A, H0, kv, kh, c1, li, Bin, c0, p, N):
         y = c1 + H0 / kv
 
         labdaL = np.sqrt(y * kh * H0)
-        x = L / (2 * labdaL)
-        FL = x * coth(x)
+        xL = L / (2 * labdaL)
+        FL = xL * coth(xL)
         labdaB = np.sqrt(y * kh * H0 * c0 / (y + c0))
-        x = Bcor / (2 * labdaB)
-        FB = x * coth(x)
+        xB = Bcor / (2 * labdaB)
+        FB = xB * coth(xB)
 
         CL = (c0 + y) * FL + (c0 * L / Bcor) * FB
         CB = (c1 + c0 + H0 / kv) / (CL - c0 * L / Bcor) * CL
