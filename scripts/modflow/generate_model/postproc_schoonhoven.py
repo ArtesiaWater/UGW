@@ -90,3 +90,19 @@ cbar = plt.colorbar(qm, cax=cax)
 cbar.set_label("Kwel/Infiltratie (mm/d)")
 fig.savefig(os.path.join(figdir, "river_leakage.png"),
             bbox_inches="tight", dpi=150)
+
+
+#%% show riv and shape
+# import geopandas as gpd
+# datadir = '../../../data'
+# water_shp = os.path.join(datadir, "modflow_sfw_schoonhoven", "waterareas.shp")
+# sfw = gpd.read_file(water_shp)
+# mask = sfw["geometry"].apply(lambda geom: geom.wkb)
+# sfw = sfw.loc[mask.drop_duplicates().index]
+
+# fig, ax = plt.subplots(1, 1, figsize=(12, 10))
+# mapview = fp.plot.PlotMapView(model=gwf, layer=0)
+# mapview.plot_bc("RIV", color="DarkGrey")
+# sfw.plot(color="CornFlowerBlue", zorder=10, ax=ax)
+
+# fig.savefig("RIV_vs_shape_l1.png", bbox_inches="tight", dpi=150)

@@ -213,18 +213,19 @@ dis = fp.mf6.ModflowGwfdis(gwf,
 # add the surface level of each grid cell
 model_ds['area'] = (('y', 'x'), mgrid.get_surface_area(gwf))
 
-# get the minimum ahn level in each cell
-ahn_fname = ahn.get_ahn_within_extent(model_ds.attrs['extent'],
-                                      return_fname=True)
-resampling = rasterio.enums.Resampling.min
-model_ds['ahn_min'] = mgrid.raster_to_quadtree_grid(ahn_fname, model_ds,
-                                                    resampling=resampling)
-resampling = rasterio.enums.Resampling.average
-model_ds['ahn_average'] = mgrid.raster_to_quadtree_grid(ahn_fname, model_ds,
-                                                        resampling=resampling)
-resampling = rasterio.enums.Resampling.max
-model_ds['ahn_max'] = mgrid.raster_to_quadtree_grid(ahn_fname, model_ds,
-                                                    resampling=resampling)
+# TODO: uncomment for other models
+# # get the minimum ahn level in each cell
+# ahn_fname = ahn.get_ahn_within_extent(model_ds.attrs['extent'],
+#                                       return_fname=True)
+# resampling = rasterio.enums.Resampling.min
+# model_ds['ahn_min'] = mgrid.raster_to_quadtree_grid(ahn_fname, model_ds,
+#                                                     resampling=resampling)
+# resampling = rasterio.enums.Resampling.average
+# model_ds['ahn_average'] = mgrid.raster_to_quadtree_grid(ahn_fname, model_ds,
+#                                                         resampling=resampling)
+# resampling = rasterio.enums.Resampling.max
+# model_ds['ahn_max'] = mgrid.raster_to_quadtree_grid(ahn_fname, model_ds,
+#                                                     resampling=resampling)
 
 # read Bathymetry of river data
 fname = os.path.join(datadir, 'Bathymetry', 'bathymetry_masks.shp')
@@ -235,7 +236,7 @@ extent_polygon = surface_water.extent2polygon(model_ds.attrs['extent'])
 mask = bathshp.intersects(extent_polygon)
 bathshp = bathshp[mask]
 bath = xr.full_like(model_ds['top'], np.NaN)
-for file in bathshp['FILE']:
+for file in bathshp['FILE'].dropna():
     fname = os.path.join(datadir, file.replace('../data/sources/', ''))
     # get the minimum bathemetry-level in each cell
     resampling = rasterio.enums.Resampling.min
@@ -314,7 +315,8 @@ mask = (sfw["BL"] > sfw[["ZP", "WP"]].min(axis=1))
 if mask.sum() > 0:
     print(f"Warning! RBOT above waterlevel in {mask.sum()} cases!")
     print("... setting RBOT 1 m below lowest water level")
-    sfw.loc[mask, "BL"] = (sfw.loc[mask, ["ZP", "WP"]].min() - 1.0).values
+    sfw.loc[mask, "BL"] = (
+        sfw.loc[mask, ["ZP", "WP"]].min(axis=1) - 1.0).values
 
 # cut geodataframe by the grid  (no caching yet)
 sfw_grid = surface_water.gdf2grid(sfw, gwf, method="vertex")
@@ -342,7 +344,8 @@ if riv_method == "aggregated":
         lowest_lvl = mdata.loc[igr, calc_cols].min()
         if np.isnan(lowest_lvl) or np.isnan(lowest_rbot):
             lowest_rbot = np.nan
-            raise ValueError("RBOT is NaN!")
+            continue
+            # raise ValueError("RBOT is NaN!")
         else:
             if lowest_rbot >= lowest_lvl:
                 lowest_rbot = lowest_lvl - 0.5
@@ -406,6 +409,7 @@ if riv_method == "aggregated":
     for cellid, row in tqdm(mdata.iterrows(), total=mdata.index.size,
                             desc="Building RIV spd"):
 
+        # rbot
         rbot = row["BL"]
         laytop = model_ds.top.isel(x=cellid[1], y=cellid[0])
         laybot = model_ds.bot.isel(x=cellid[1], y=cellid[0])
@@ -421,10 +425,17 @@ if riv_method == "aggregated":
                 if idomain.data[j] > 0:
                     layers.append(j)
 
+        # stage
         if steady_state:
             stage = row[["ZP", "WP"]].mean()  # mean level summer/winter
         else:
             stage = row["name_largest"]
+            # TODO: find out why these aren't working
+            if stage in ["NL.31.Amsterdam-Rijnkanaal",
+                         "NL.14.Amsterdam-Rijnkanaal",
+                         "NL.8.Randmeren-Zuid"]:
+                print(f"skipped {stage}")
+                continue
             if stage is None:
                 # if delange:
                 #     stage = row["pstar"]
@@ -434,9 +445,11 @@ if riv_method == "aggregated":
                 stage = (stage.replace(".", "_")
                          .replace(" ", "_")
                          .replace("/", "_"))
-            elif stage.isna():
-                pass
-                # continue
+            elif np.isnan(stage):
+                # pass
+                continue
+
+        # conductance
         if delange:
             cond = row["cond"]
         else:
@@ -460,6 +473,7 @@ if riv_method == "aggregated":
                                                               model_ds.bot,
                                                               model_ds.idomain,
                                                               model_ds.kh)
+        # write SPD
         for lay, cond in zip(lays, conds):
             cid = (lay,) + cellid
             spd.append([cid, stage, cond, rbot])
@@ -533,9 +547,14 @@ mend = model_ds.time.isel(time=-1).to_pandas()
 if not steady_state:
     tseries_list = []
 
-    for peilvak in sfw.src_id_wla.unique():
+    # for peilvak in sfw.src_id_wla.unique():
+    for peilvak in tqdm(mdata.name_largest.unique(),
+                        desc="Generating timeseries"):
         if peilvak is None:
             continue
+        if isinstance(peilvak, float):
+            if np.isnan(peilvak):
+                continue
         peilen = sfw.loc[sfw.src_id_wla == peilvak, ["ZP", "WP"]].iloc[0]
 
         if peilen.isna().any():
@@ -562,7 +581,7 @@ if not steady_state:
                       timeseries=list(zip(ts0.index.to_list(), ts0.to_list())),
                       time_series_namerecord=ts0.name,
                       interpolation_methodrecord='stepwise')
-    for its in tseries_list[1:]:
+    for its in tqdm(tseries_list[1:], desc="Adding timeseries"):
         riv.ts.append_package(filename=f'{its.name}.ts',
                               timeseries=list(
                                   zip(its.index.to_list(), its.to_list())),
@@ -613,7 +632,10 @@ if not os.path.isfile(rivobs_fname):
     surface_water.request_waterinfo_waterlevels(riv2stn, mailadres,
                                                 tmin=model_ds.time.values[0],
                                                 tmax=model_ds.time.values[-1])
-model_ds['bathymetry'] = model_ds['bathymetry'].fillna(model_ds['ahn_min'])
+# TODO: ensure ahn option always works
+# model_ds['bathymetry'] = model_ds['bathymetry'].fillna(model_ds['ahn_min'])
+model_ds['bathymetry'] = model_ds['bathymetry'].fillna(model_ds['top'])
+
 surface_water.waterinfo_to_ghb(rivobs_fname, riv2stn, gdfv, gwf, model_ds,
                                gdfl=gdfl, intersect_method="vertex")
 

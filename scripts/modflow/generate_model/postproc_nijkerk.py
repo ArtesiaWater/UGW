@@ -7,8 +7,8 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import flopy as fp
 
 
-model_ws = '../../model/nijkerk_agg_dl'
-model_name = 'nkrk_agg_dl'
+model_ws = '../../model/ugw'
+model_name = 'ugw'
 sim_name = 'mfsim'
 figdir = os.path.join(model_ws, 'figure')
 headfile = f'{model_name}.hds'
