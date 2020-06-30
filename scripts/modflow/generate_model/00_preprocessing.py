@@ -8,12 +8,11 @@ sys.path.append("../../../../NHFLO/NHFLOPY")
 from modules import mgrid, util
 
 datadir = '../../../data'
-modelname = "schoonhoven"
+modelname = "heel_gebied"
 regis_nc = f"regis_ugw_{modelname}.nc"  # regis NetCDF filename
 
 # %% extent
-
-shp = os.path.join(datadir, "modflow_sfw_nijkerk/waterareas.shp")
+shp = os.path.join(datadir, f"modflow_sfw_{modelname}/waterareas.shp")
 gdf = gpd.read_file(shp)
 bounds = gdf.geometry.total_bounds
 extent = [bounds[0], bounds[2], bounds[1], bounds[3]]
@@ -37,7 +36,6 @@ regis_ds_raw = regis_ds_raw.sel(layer=lay_sel)
 regis_ds_raw.to_netcdf(os.path.join(datadir, regis_nc))
 
 # %% copy more specific files from google drive folder of Artesia
-
 if False:
     # the waterinfo file
     fname = os.path.join(datadir, '20200603_044.zip')
@@ -45,12 +43,18 @@ if False:
         '1jG7KvCSQH1PLGI00HYo4EpjYxTM1UCAr', fname)
 
     # modflow.zip
+    if modelname == 'schoonhoven':
+        file_id = '1k0QiOlMLAg5KS-B9Tra4ncpRnBvOylX0'
+    elif modelname == 'heel_gebied':
+        file_id = '1-OcX9R-j_wBQQWYHbXdQNZaw7-YHdcoM'
+    else:
+        raise(Exception(f'Modelname {modelname} not supported'))
     fname = os.path.join(datadir, 'modflow.zip')
-    util.download_file_from_google_drive(
-        '1k0QiOlMLAg5KS-B9Tra4ncpRnBvOylX0', fname)
+    util.download_file_from_google_drive(file_id, fname)
     # extract to modflow_sfw_schoonhoven
     with zipfile.ZipFile(fname, 'r') as zip_ref:
-        zip_ref.extractall(os.path.join(datadir, 'modflow_sfw_schoonhoven'))
+        zip_ref.extractall(os.path.join(datadir, f'modflow_sfw_{modelname}'))
+    os.remove(fname)
 
     # bathiemetry
     fname = os.path.join(datadir, 'Bathymetry.zip')
