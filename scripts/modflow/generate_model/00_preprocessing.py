@@ -11,30 +11,6 @@ datadir = '../../../data'
 modelname = "heel_gebied"
 regis_nc = f"regis_ugw_{modelname}.nc"  # regis NetCDF filename
 
-# %% extent
-shp = os.path.join(datadir, f"modflow_sfw_{modelname}/waterareas.shp")
-gdf = gpd.read_file(shp)
-bounds = gdf.geometry.total_bounds
-extent = [bounds[0], bounds[2], bounds[1], bounds[3]]
-
-# %% regis
-cs_regis = 100.  # cell size regis
-url = r'http://www.dinodata.nl:80/opendap/REGIS/REGIS.nc'
-
-# redefine extent, nrow & ncol (fit to regis)
-extent, nrow, ncol = mgrid.fit_extent_to_regis(extent, cs_regis, cs_regis)
-
-# get number of layers
-regis_ds_raw = xr.open_dataset(url).sel(x=slice(extent[0], extent[1]),
-                                        y=slice(extent[2], extent[3]))
-regis_ds_raw = regis_ds_raw[['top', 'bottom', 'kD', 'c', 'kh', 'kv']]
-
-nlay, lay_sel = mgrid.get_number_of_layers_from_regis(regis_ds_raw)
-regis_ds_raw = regis_ds_raw.sel(layer=lay_sel)
-
-# %% write netcdf
-regis_ds_raw.to_netcdf(os.path.join(datadir, regis_nc))
-
 # %% copy more specific files from google drive folder of Artesia
 if False:
     # the waterinfo file
@@ -62,6 +38,30 @@ if False:
         '1k0O6FiOpsjy8-wA0cVgLzuNmAYBwz4IX', fname)
     with zipfile.ZipFile(fname, 'r') as zip_ref:
         zip_ref.extractall(datadir)
+
+# %% extent
+shp = os.path.join(datadir, f"modflow_sfw_{modelname}/waterareas.shp")
+gdf = gpd.read_file(shp)
+bounds = gdf.geometry.total_bounds
+extent = [bounds[0], bounds[2], bounds[1], bounds[3]]
+
+# %% regis
+cs_regis = 100.  # cell size regis
+url = r'http://www.dinodata.nl:80/opendap/REGIS/REGIS.nc'
+
+# redefine extent, nrow & ncol (fit to regis)
+extent, nrow, ncol = mgrid.fit_extent_to_regis(extent, cs_regis, cs_regis)
+
+# get number of layers
+regis_ds_raw = xr.open_dataset(url).sel(x=slice(extent[0], extent[1]),
+                                        y=slice(extent[2], extent[3]))
+regis_ds_raw = regis_ds_raw[['top', 'bottom', 'kD', 'c', 'kh', 'kv']]
+
+nlay, lay_sel = mgrid.get_number_of_layers_from_regis(regis_ds_raw)
+regis_ds_raw = regis_ds_raw.sel(layer=lay_sel)
+
+# %% write netcdf
+regis_ds_raw.to_netcdf(os.path.join(datadir, regis_nc))
 
 # %% download DINO
 if False:
