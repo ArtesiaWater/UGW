@@ -27,16 +27,16 @@ mpl.interactive(True)
 # %% Model settings
 
 use_cache = True
-model_ws = '../../model/ugw'
-model_name = 'ugw'
+model_ws = '../../model/schoonhoven_agg_dl'
+model_name = 'schnhvn_agg_dl'
 
 # method
 riv_method = "aggregated"
 delange = True
 
 # grid
-delr = 500.            # zelfde als dx
-delc = 500.            # zelfde als dy
+delr = 50.            # zelfde als dx
+delc = 50.            # zelfde als dy
 angrot = 0            # nog niet geimplementeerd
 
 # geef hier paths op
@@ -45,7 +45,7 @@ figdir = os.path.join(model_ws, 'figure')
 cachedir = os.path.join(model_ws, 'cache')
 
 # files
-regis_nc = 'regis_ugw.nc'
+regis_nc = 'regis_ugw_schoonhoven.nc'
 dinofile = os.path.join(datadir, 'oc_dino_heel_gebied.pklz')
 water_shp = os.path.join(datadir, "modflow_sfw_heel_gebied", "waterareas.shp")
 rivobs_fname = os.path.join(datadir, '20200624_009.zip')
@@ -60,7 +60,7 @@ if not os.path.exists(figdir):
 if not os.path.exists(cachedir):
     os.mkdir(cachedir)
 
-f = open(os.path.join(model_ws, "ugw_log.txt"), "w")
+f = open(os.path.join(model_ws, "schoonhoven_log.txt"), "w")
 
 # %% Shapefile (for RIV and extent)
 # read shapefile
@@ -93,7 +93,7 @@ model_ds = mtime.get_model_ds_time(start_time=start_time,
                                    nstp=nstp,
                                    tsmult=tsmult)
 
-tdis_perioddata = [(model_ds.perlen[i], model_ds.nstp,
+tdis_perioddata = [(model_ds.perlen, model_ds.nstp,
                     model_ds.tsmult) for i in range(model_ds.nper)]
 
 # %% SIM
@@ -139,24 +139,24 @@ regis_ds_raw = xr.open_dataset(regis_path).sel(x=slice(extent[0], extent[1]),
 
 # gebruik dit alleen als je het aantal modellagen wil
 # aanpassen n.a.v. het aantal actieve regis lagen
-nlay, lay_sel = mgrid.get_number_of_layers_from_regis(regis_ds_raw)
+nlay, lay_sel = mgrid.get_lay_from_ml_layers(regis_ds_raw)
 regis_ds_raw = regis_ds_raw.sel(layer=lay_sel)
 
 # convert regis dataset to grid
-regis_ds = util.get_regis_dataset(gridtype='structured',
-                                  regis_ds_raw=regis_ds_raw,
-                                  extent=extent,
-                                  delr=delr,
-                                  delc=delc,
-                                  interp_method="nearest",
-                                  cachedir=cachedir,
-                                  fname_netcdf=regis_nc,
-                                  use_cache=use_cache)
+regis_ds = util.get_ml_layer_dataset_struc(gridtype='structured',
+                                           raw_ds=regis_ds_raw,
+                                           extent=extent,
+                                           delr=delr,
+                                           delc=delc,
+                                           interp_method="nearest",
+                                           cachedir=cachedir,
+                                           fname_netcdf=regis_nc,
+                                           use_cache=use_cache)
 
 # %% get model_ds, add idomain, top & bot
-model_ds = mgrid.update_model_ds_from_regis_ds(model_ds, regis_ds,
-                                               keep_vars=['x', 'y'],
-                                               verbose=True)
+model_ds = mgrid.update_model_ds_from_ml_layer_ds(model_ds, regis_ds,
+                                                  keep_vars=['x', 'y'],
+                                                  verbose=True)
 model_ds = mgrid.add_idomain_from_bottom_to_dataset(regis_ds['bottom'],
                                                     model_ds)
 model_ds = subsurface.add_top_bot_to_model_ds(regis_ds,
@@ -175,11 +175,11 @@ if confined:
 else:
     icelltype = 1
 
-model_ds = subsurface.add_kh_kv_from_regis_to_dataset(regis_ds,
-                                                      model_ds,
-                                                      anisotropy,
-                                                      fill_value_kh,
-                                                      fill_value_kv)
+model_ds = subsurface.add_kh_kv_from_ml_layer_to_dataset(regis_ds,
+                                                         model_ds,
+                                                         anisotropy,
+                                                         fill_value_kh,
+                                                         fill_value_kv)
 
 
 # %% DIS
@@ -214,18 +214,18 @@ dis = fp.mf6.ModflowGwfdis(gwf,
 model_ds['area'] = (('y', 'x'), mgrid.get_surface_area(gwf))
 
 # TODO: uncomment for other models
-# # get the minimum ahn level in each cell
-# ahn_fname = ahn.get_ahn_within_extent(model_ds.attrs['extent'],
-#                                       return_fname=True)
-# resampling = rasterio.enums.Resampling.min
-# model_ds['ahn_min'] = mgrid.raster_to_quadtree_grid(ahn_fname, model_ds,
-#                                                     resampling=resampling)
-# resampling = rasterio.enums.Resampling.average
-# model_ds['ahn_average'] = mgrid.raster_to_quadtree_grid(ahn_fname, model_ds,
-#                                                         resampling=resampling)
-# resampling = rasterio.enums.Resampling.max
-# model_ds['ahn_max'] = mgrid.raster_to_quadtree_grid(ahn_fname, model_ds,
-#                                                     resampling=resampling)
+# get the minimum ahn level in each cell
+ahn_fname = ahn.get_ahn_within_extent(model_ds.attrs['extent'],
+                                      return_fname=True)
+resampling = rasterio.enums.Resampling.min
+model_ds['ahn_min'] = mgrid.raster_to_quadtree_grid(ahn_fname, model_ds,
+                                                    resampling=resampling)
+resampling = rasterio.enums.Resampling.average
+model_ds['ahn_average'] = mgrid.raster_to_quadtree_grid(ahn_fname, model_ds,
+                                                        resampling=resampling)
+resampling = rasterio.enums.Resampling.max
+model_ds['ahn_max'] = mgrid.raster_to_quadtree_grid(ahn_fname, model_ds,
+                                                    resampling=resampling)
 
 # read Bathymetry of river data
 fname = os.path.join(datadir, 'Bathymetry', 'bathymetry_masks.shp')
@@ -633,8 +633,8 @@ if not os.path.isfile(rivobs_fname):
                                                 tmin=model_ds.time.values[0],
                                                 tmax=model_ds.time.values[-1])
 # TODO: ensure ahn option always works
-# model_ds['bathymetry'] = model_ds['bathymetry'].fillna(model_ds['ahn_min'])
-model_ds['bathymetry'] = model_ds['bathymetry'].fillna(model_ds['top'])
+model_ds['bathymetry'] = model_ds['bathymetry'].fillna(model_ds['ahn_min'])
+# model_ds['bathymetry'] = model_ds['bathymetry'].fillna(model_ds['top'])
 
 surface_water.waterinfo_to_ghb(rivobs_fname, riv2stn, gdfv, gwf, model_ds,
                                gdfl=gdfl, intersect_method="vertex")
