@@ -44,14 +44,19 @@ fname = os.path.join(model_ws, budgetfile)
 cbc = fp.utils.CellBudgetFile(fname)
 
 spdis = cbc.get_data(text="SPDIS")
-qriv = cbc.get_data(kstpkper=(0, 0), text="RIV")[0]
-qriv3D = cbc.create3D(qriv, gwf.modelgrid.nlay, gwf.modelgrid.nrow,
-                      gwf.modelgrid.ncol)
-qghb = cbc.get_data(kstpkper=(0, 0), text="GHB")[0]
-qghb3D = cbc.create3D(qghb, gwf.modelgrid.nlay, gwf.modelgrid.nrow,
-                      gwf.modelgrid.ncol)
 
-q3D = qriv3D.data + qghb3D.data
+q3D = 0.0
+t = 0
+
+for txt in ["RIV", "DRN", "GHB"]:
+    try:
+        q = cbc.get_data(kstpkper=(0, 0), text=txt)[t]
+    except Exception:
+        print(f"{txt} not in budget file.")
+        continue
+    q3Di = cbc.create3D(q, gwf.modelgrid.nlay, gwf.modelgrid.nrow,
+                        gwf.modelgrid.ncol)
+    q3D += q3Di.data
 
 qx, qy, qz = fp.utils.postprocessing.get_specific_discharge(gwf,
                                                             fname,
@@ -60,11 +65,11 @@ qx, qy, qz = fp.utils.postprocessing.get_specific_discharge(gwf,
 # %% plot head and quiver
 fig, ax = plt.subplots(1, 1, figsize=(14, 10))
 mapview = fp.plot.PlotMapView(model=gwf)
-qm = mapview.plot_array(h[0], cmap="RdBu", vmin=-6, vmax=15)
-qv = mapview.plot_vector(qx, qy, istep=1, jstep=1, normalize=False,
-                         scale=2, alpha=0.75, width=.00175,
-                         headwidth=3, headlength=3, headaxislength=2,
-                         pivot="mid")
+qm = mapview.plot_array(h[0], cmap="RdBu", vmin=-6, vmax=6)
+# qv = mapview.plot_vector(qx, qy, istep=1, jstep=1, normalize=False,
+#                          scale=2, alpha=0.75, width=.00175,
+#                          headwidth=3, headlength=3, headaxislength=2,
+#                          pivot="mid")
 
 divider = make_axes_locatable(ax)
 cax = divider.append_axes('right', size='3%', pad=0.05)
@@ -102,3 +107,11 @@ cbar = plt.colorbar(qm, cax=cax)
 cbar.set_label("Kwel/Infiltratie (mm/d)")
 fig.savefig(os.path.join(figdir, "river_leakage.png"),
             bbox_inches="tight", dpi=150)
+
+# %%
+
+# npf = gwf.load_package("npf")
+
+# fig, ax = plt.subplots(1, 1, figsize=(16, 10))
+# xsec = fp.plot.PlotCrossSection(gwf, ax=ax, line={"row": 0})
+# xsec.plot_array(npf.k.array, cmap="viridis")

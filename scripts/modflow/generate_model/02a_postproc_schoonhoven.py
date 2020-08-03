@@ -32,14 +32,19 @@ fname = os.path.join(model_ws, budgetfile)
 cbc = fp.utils.CellBudgetFile(fname)
 
 spdis = cbc.get_data(text="SPDIS")
-qriv = cbc.get_data(kstpkper=(0, 0), text="RIV")[0]
-qriv3D = cbc.create3D(qriv, gwf.modelgrid.nlay, gwf.modelgrid.nrow,
-                      gwf.modelgrid.ncol)
-qghb = cbc.get_data(kstpkper=(0, 0), text="GHB")[0]
-qghb3D = cbc.create3D(qghb, gwf.modelgrid.nlay, gwf.modelgrid.nrow,
-                      gwf.modelgrid.ncol)
 
-q3D = qriv3D.data + qghb3D.data
+q3D = 0.0
+t = 0
+
+for txt in ["RIV", "DRN", "GHB"]:
+    try:
+        q = cbc.get_data(kstpkper=(0, 0), text=txt)[t]
+    except Exception:
+        print(f"{txt} not in budget file.")
+        continue
+    q3Di = cbc.create3D(q, gwf.modelgrid.nlay, gwf.modelgrid.nrow,
+                        gwf.modelgrid.ncol)
+    q3D += q3Di.data
 
 qx, qy, qz = fp.utils.postprocessing.get_specific_discharge(gwf,
                                                             fname,
