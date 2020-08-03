@@ -67,5 +67,5 @@ regis_ds_raw.to_netcdf(os.path.join(datadir, regis_nc))
 if False:
     import hydropandas as hpd
 
-    oc_dino = hpd.ObsCollection.from_dino(extent=extent, verbose=True)
+    oc_dino = hpd.ObsCollection.from_dino(extent=extent, verbose=True, )
     oc_dino.to_pickle(os.path.join(datadir, f'oc_dino_{modelname}.pklz'))
