@@ -12,32 +12,27 @@ modelname = "heel_gebied"
 regis_nc = f"regis_ugw_{modelname}.nc"  # regis NetCDF filename
 
 # %% copy more specific files from google drive folder of Artesia
-if False:
-    # the waterinfo file
-    fname = os.path.join(datadir, '20200603_044.zip')
-    util.download_file_from_google_drive(
-        '1jG7KvCSQH1PLGI00HYo4EpjYxTM1UCAr', fname)
+# the waterinfo file
+fname = os.path.join(datadir, '20200717_026.zip')
+util.download_file_from_google_drive(
+    '1ui1_wZJoN2oh2xwbdLHStVVO7qv0rQmj', fname)
 
-    # modflow.zip
-    if modelname == 'schoonhoven':
-        file_id = '1k0QiOlMLAg5KS-B9Tra4ncpRnBvOylX0'
-    elif modelname == 'heel_gebied':
-        file_id = '1-OcX9R-j_wBQQWYHbXdQNZaw7-YHdcoM'
-    else:
-        raise(Exception(f'Modelname {modelname} not supported'))
-    fname = os.path.join(datadir, 'modflow.zip')
-    util.download_file_from_google_drive(file_id, fname)
-    # extract to modflow_sfw_schoonhoven
-    with zipfile.ZipFile(fname, 'r') as zip_ref:
-        zip_ref.extractall(os.path.join(datadir, f'modflow_sfw_{modelname}'))
-    os.remove(fname)
+# modflow_heel_gebied.zip
+file_id = '1unBNbwnTNGpkstSNV3TbaClQoieoP7e0'
+fname = os.path.join(datadir, 'modflow_heel_gebied.zip')
+util.download_file_from_google_drive(file_id, fname)
+# extract to modflow_sfw_schoonhoven
+with zipfile.ZipFile(fname, 'r') as zip_ref:
+    zip_ref.extractall(os.path.join(datadir, f'modflow_sfw_heel_gebied'))
+os.remove(fname)
 
-    # bathiemetry
-    fname = os.path.join(datadir, 'Bathymetry.zip')
-    util.download_file_from_google_drive(
-        '1k0O6FiOpsjy8-wA0cVgLzuNmAYBwz4IX', fname)
-    with zipfile.ZipFile(fname, 'r') as zip_ref:
-        zip_ref.extractall(datadir)
+# bathiemetry
+fname = os.path.join(datadir, 'Bathymetry.zip')
+util.download_file_from_google_drive(
+    '1k0O6FiOpsjy8-wA0cVgLzuNmAYBwz4IX', fname)
+with zipfile.ZipFile(fname, 'r') as zip_ref:
+    zip_ref.extractall(datadir)
+os.remove(fname)
 
 # %% extent
 shp = os.path.join(datadir, f"modflow_sfw_{modelname}/waterareas.shp")
@@ -57,7 +52,7 @@ regis_ds_raw = xr.open_dataset(url).sel(x=slice(extent[0], extent[1]),
                                         y=slice(extent[2], extent[3]))
 regis_ds_raw = regis_ds_raw[['top', 'bottom', 'kD', 'c', 'kh', 'kv']]
 
-nlay, lay_sel = mgrid.get_number_of_layers_from_regis(regis_ds_raw)
+nlay, lay_sel = mgrid.get_lay_from_ml_layers(regis_ds_raw)
 regis_ds_raw = regis_ds_raw.sel(layer=lay_sel)
 
 # %% write netcdf

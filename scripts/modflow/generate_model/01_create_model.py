@@ -11,7 +11,6 @@ import rasterio
 import xarray as xr
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import shapely
-from shapely.geometry import MultiPolygon
 from tqdm import tqdm
 
 import flopy as fp
@@ -37,6 +36,9 @@ add_riv_slope = True  # add sloping surface water from line shapefile
 surfwat_pkgs = []  # collect surface water packages in this list
 
 # grid
+extent = None # extent is determined from surface-water shape
+# extent = [105900., 172800., 425400., 489300.] # entire model area
+# extent = [116000, 120000, 438000, 442000] # Schoonhoven
 delr = 200.            # zelfde als dx
 delc = 200.            # zelfde als dy
 
@@ -77,7 +79,11 @@ except NameError:
 # %% Shapefile (for RIV and extent)
 
 # read water areas shapefile
-sfw = gpd.read_file(water_shp)
+if extent is None:
+    sfw = gpd.read_file(water_shp)
+else:
+    bbox = (extent[0], extent[2], extent[1], extent[3])
+    sfw = gpd.read_file(water_shp, bbox=bbox)
 # drop duplicates
 mask = sfw["geometry"].apply(lambda geom: geom.wkb)
 sfw = sfw.loc[mask.drop_duplicates().index]
@@ -156,9 +162,13 @@ ims = fp.mf6.ModflowIms(sim,
                         complexity='SIMPLE')
 
 # %% Define modflow grid
-
-bounds = sfw.geometry.total_bounds
-extent = (bounds[0], bounds[2], bounds[1], bounds[3])
+if extent is None:
+    bounds = sfw.geometry.total_bounds
+    extent = (bounds[0], bounds[2], bounds[1], bounds[3])
+else:
+    mlpol = shapely.geometry.box(extent[0], extent[2], extent[1], extent[3])
+    sfw = sfw[sfw.intersects(mlpol)].reset_index(drop=True)
+    sfw.geometry = sfw.intersection(mlpol)
 
 length_units = 'METERS'
 
@@ -263,7 +273,10 @@ fname = os.path.join(datadir, 'Bathymetry', 'bathymetry_masks.shp')
 bathshp = gpd.read_file(fname)
 bathshp["FILE"] = bathshp["FILE"].apply(lambda fp: fp.replace(
     "\\", "/") if isinstance(fp, str) else None)
-extent_polygon = surface_water.extent2polygon(model_ds.attrs['extent'])
+extent_polygon = shapely.geometry.box(model_ds.attrs['extent'][0],
+                                      model_ds.attrs['extent'][2],
+                                      model_ds.attrs['extent'][1],
+                                      model_ds.attrs['extent'][3])
 mask = bathshp.intersects(extent_polygon)
 bathshp = bathshp[mask]
 bath = xr.full_like(model_ds['top'], np.NaN)
@@ -276,6 +289,12 @@ for file in bathshp['FILE'].dropna():
     bath = bath.where(np.isnan(zt) | (bath < zt), zt)
 # apparently bathemetry is in mm (need to check if this is always the case)
 model_ds['bathymetry'] = bath = bath / 1000.
+
+# TODO: ensure ahn option always works
+# fill bathemetry by ahn, so there is allways data
+model_ds['bathymetry'] = model_ds['bathymetry'].fillna(model_ds['ahn_min'])
+# and otherwise fill by the top of the model
+model_ds['bathymetry'] = model_ds['bathymetry'].fillna(model_ds['top'])
 
 # %% NPF
 npf = fp.mf6.ModflowGwfnpf(gwf,
@@ -342,13 +361,13 @@ def check_surface_water_shape(sfw):
     mask_riv = ((sfw.SUB == 1) &
                 (sfw.has_bath == 0) &
                 (sfw.has_slope == 0) &
-                (sfw.admin != "RWS") &
+                (sfw.src_wla != "rws_legger") &
                 (~sfw.BL.isna()) &
                 (~sfw.src_id_wla.isna()))
     mask_drn = ((sfw.SUB == 0) &
                 (sfw.has_bath == 0) &
                 (sfw.has_slope == 0) &
-                (sfw.admin != "RWS") &
+                (sfw.src_wla != "rws_legger") &
                 (~sfw.BL.isna()) &
                 (~sfw.src_id_wla.isna()))
     mask_slope = ((sfw.has_slope == 1) &
@@ -382,18 +401,21 @@ sfw_grid = util.get_cache_gdf(use_cache, cachedir, "sfw_grid.pkl",
 
 # %% RIV/DRN for surface water
 
+# get the bottom height from the bathemetry-data
+mask = sfw_grid.has_bath == 1
+row, col = zip(*sfw_grid.loc[mask, 'cellid'])
+sfw_grid.loc[mask, 'BL'] = model_ds['bathymetry'].values[row,col]
+
 # do not parse if src_id_wla is NaN.
 # do not parse if bottom level is NaN
 mask_riv = ((sfw_grid.SUB == 1) &
-            (sfw_grid.has_bath == 0) &
             (sfw_grid.has_slope == 0) &
-            (sfw_grid.admin != "RWS") &
+            (sfw_grid.src_wla != "rws_legger") &
             (~sfw_grid.BL.isna()) &
             (~sfw_grid.src_id_wla.isna()))
 mask_drn = ((sfw_grid.SUB == 0) &
-            (sfw_grid.has_bath == 0) &
             (sfw_grid.has_slope == 0) &
-            (sfw_grid.admin != "RWS") &
+            (sfw_grid.src_wla != "rws_legger") &
             (~sfw_grid.BL.isna()) &
             (~sfw_grid.src_id_wla.isna()))
 sfw_riv = sfw_grid.loc[mask_riv]
@@ -585,41 +607,53 @@ if (mask_slope.sum() > 0) and (add_riv_slope):
                                    save_flows=True,
                                    maxbound=len(spd))
 
-# %% GHB (surface water with bathymetry)
+# %% GHB (surface water from rws)
+mask = sfw_grid.src_wla == "rws_legger"
+gdf_rws = sfw_grid[mask].copy()
+if False:
+    # make a plot of the surface_water
+    ax = gdf_rws.plot('src_id_wla',categorical=True, legend=True, colormap='tab20',
+                      legend_kwds={'prop': {"size":7.0}, 'loc':(0.6,0.34)},
+                      figsize=(10,10))
+    ax.figure.tight_layout(pad=0.0)
+gdf_rws = gdf_rws.set_index('src_id_wla')
 
 riv2stn = {}
-riv2stn['Amsterdam-Rijnkanaal Betuwepand'] = ['Tiel Kanaal']
-riv2stn['Amsterdam-Rijnkanaal Noordpand'] = ['Amsterdam Surinamekade',
-                                             'Weesp West', 'Maarssen',
-                                             'Nieuwegein',
-                                             'Wijk bij Duurstede kanaal']
-riv2stn['Bedijkte Maas'] = ['Lith boven', 'Megen dorp', 'Grave beneden']
-riv2stn['Beneden Maas'] = ['Heesbeen', 'Empel beneden', 'Lith dorp']
-riv2stn['Bovenrijn, Waal'] = ['Vuren', 'Zaltbommel', 'Tiel Waal', 'Dodewaard',
-                              'Nijmegen haven']
-riv2stn['Boven- en Beneden Merwede'] = ['Dordrecht',
-                                        'Werkendam buiten',
-                                        'Vuren']
-riv2stn['Dordtse Biesbosch'] = ['Moerdijk', 'Werkendam buiten']
-riv2stn['Hollandsche IJssel'] = ['Krimpen a/d IJssel', 'Gouda brug']
-riv2stn['Markermeer'] = ['Schellingwouderbrug', 'Hollandse brug']
-riv2stn['Nederrijn, Lek'] = ['Hagestein boven', 'Culemborg brug',
-                             'Amerongen beneden', 'Amerongen boven',
-                             'Grebbe', 'Driel beneden']
-riv2stn['Noordzeekanaal'] = ['IJmuiden binnen', 'Buitenhuizen (kilometer 10)',
-                             'Amsterdam Surinamekade', 'Weesp West']
-riv2stn['Oude Maas'] = ['Krimpen a/d IJssel', 'Krimpen a/d Lek',
-                        'Schoonhoven', 'Hagestein beneden']
-riv2stn['Randmeren-zuid'] = ['Hollandse brug', 'Nijkerk west']
-riv2stn['Randmeren-oost'] = ['Nijkerk Nuldernauw', 'Elburg']
+riv2stn['NL.1.Afgedamde Maas'] = ['Vuren']
+riv2stn['NL.1.Amsterdam-Rijnkanaal'] = ['Amsterdam Surinamekade', 'Weesp West',
+                                        'Maarssen', 'Nieuwegein',
+                                        'Wijk bij Duurstede kanaal',
+                                        'Tiel Kanaal']
+riv2stn['NL.1.Beneden Merwede'] = ['Dordrecht', 'Werkendam buiten']
+riv2stn['NL.1.Boven Merwede'] = ['Werkendam buiten', 'Vuren']
+riv2stn['NL.1.Boven-Rijn - Waal'] = ['Vuren', 'Zaltbommel', 'Tiel Waal',
+                                     'Dodewaard', 'Nijmegen haven']
+riv2stn['NL.1.Buiten IJ'] = ['Schellingwouderbrug']
+riv2stn['NL.1.Hollandsche IJssel'] = ['Krimpen a/d IJssel', 'Gouda brug']
+riv2stn['NL.1.Lek'] = ['Schoonhoven', 'Hagestein beneden', 'Hagestein boven',
+                       'Culemborg brug', 'Amerongen beneden',
+                       'Amerongen boven', 'Grebbe', 'Driel beneden']
+riv2stn['NL.1.Maas'] = ['Empel beneden', 'Lith dorp', 'Lith boven',
+                        'Megen dorp', 'Grave beneden']
+riv2stn['NL.1.Markermeer'] = ['Schellingwouderbrug', 'Hollandse brug']
+riv2stn['NL.1.Merwedekanaal - Vaartse Rijn - Stadsbuitengracht Utrecht'] = []
+riv2stn['NL.1.Nieuwe Merwede'] = ['Moerdijk', 'Werkendam buiten']
+riv2stn['NL.1.Noordzeekanaal'] = ['Amsterdam Surinamekade']
+riv2stn['NL.1.Pannerdensch Kanaal - Nederrijn - Lek'] = ['Krimpen a/d IJssel',
+                                                         'Krimpen a/d Lek',
+                                                         'Schoonhoven',
+                                                         'Hagestein beneden']
+riv2stn['NL.1.Randmeren-Oost'] = ['Nijkerk Nuldernauw', 'Elburg']
+riv2stn['NL.1.Randmeren-Zuid'] = ['Hollandse brug', 'Nijkerk west']
+riv2stn['NL.1.Sliedrechtse Biesbosch'] = ['Dordrecht']
+riv2stn['NL.14.Amsterdam-Rijnkanaal'] = riv2stn['NL.1.Amsterdam-Rijnkanaal']
+riv2stn['NL.14.Merwedekanaal - Vaartse Rijn - Stadsbuitengracht Utrecht'] = ['Doorslag']
+riv2stn['NL.31.Amsterdam-Rijnkanaal'] = riv2stn['NL.1.Amsterdam-Rijnkanaal']
+riv2stn['NL.8.Randmeren-Zuid'] = riv2stn['NL.1.Randmeren-Zuid']
 
-gdfv = rws.get_river_polygons(extent)
-
-try:
-    gdfl = rws.get_river_lines(extent)
-except KeyError as e:
-    print("Could not download river lines!")
-    gdfl = None
+#gdfv = rws.get_river_polygons(extent)
+#gdfv['geometry'] = gdfv.intersection(box(extent[0], extent[1], extent[2], extent[3]))
+#gdfv[~gdfv.is_empty].reset_index().plot('OWMNAAM', legend=True, cmap='tab20')
 
 if not os.path.isfile(rivobs_fname):
     msg = ('Connot find file {0}. Please run below code (after changing '
@@ -631,12 +665,9 @@ if not os.path.isfile(rivobs_fname):
                                                 tmin=model_ds.time.values[0],
                                                 tmax=(model_ds.time.values[-1]
                                                       + np.timedelta64(perlen, "D")))
-# TODO: ensure ahn option always works
-model_ds['bathymetry'] = model_ds['bathymetry'].fillna(model_ds['ahn_min'])
-# model_ds['bathymetry'] = model_ds['bathymetry'].fillna(model_ds['top'])
 
-surface_water.waterinfo_to_ghb(rivobs_fname, riv2stn, gdfv, gwf, model_ds,
-                               gdfl=gdfl, intersect_method="vertex")
+surface_water.waterinfo_to_ghb(rivobs_fname, riv2stn, gdf_rws, gwf, model_ds,
+                               intersect_method="vertex")
 surfwat_pkgs.append("GHB")
 
 # close log file
@@ -674,8 +705,6 @@ if not success:
     raise Exception(msg)
 
 # %% Post-processing
-
-mpl.interactive(True)
 
 # open head file
 fname = os.path.join(model_ws, headfile)
