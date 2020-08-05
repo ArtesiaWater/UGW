@@ -1,6 +1,7 @@
 import os
 from shutil import copyfile
 from timeit import default_timer
+import platform
 
 import geopandas as gpd
 import matplotlib as mpl
@@ -137,8 +138,11 @@ tdis_perioddata = [(model_ds.perlen,
 
 # %% SIM
 # Create the Flopy simulation object
+exe_name = r'..\..\..\tools\mf6'
+if platform.system() in 'Windows':
+    exe_name += '.exe'
 sim = fp.mf6.MFSimulation(sim_name=model_name,
-                          exe_name='mf6',
+                          exe_name=exe_name,
                           version='mf6',
                           sim_ws=model_ws)
 
