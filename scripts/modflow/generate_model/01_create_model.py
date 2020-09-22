@@ -27,24 +27,24 @@ mpl.interactive(True)
 # %% Model settings
 
 use_cache = True
-model_ws = '../../model/ugw_ind'
-model_name = 'ugw_ind'
+model_ws = '../../model/schoonhoven_ind'
+model_name = 'schnhvn_ind'
 
 # method
 riv_method = "individual"  # individual or aggregated
-agg_method = "delange"  # delange, area or max
+agg_method = "delange"  # 'delange', 'area' or 'max'
 add_riv_slope = True  # add sloping surface water from line shapefile
 surfwat_pkgs = []  # collect surface water packages in this list
 
 # grid
-extent = None # extent is determined from surface-water shape
+extent = None  # extent is determined from surface-water shape
 # extent = [105900., 172800., 425400., 489300.] # entire model area
-# extent = [116000, 120000, 438000, 442000] # Schoonhoven
-delr = 200.            # zelfde als dx
-delc = 200.            # zelfde als dy
+extent = [116000, 120000, 438000, 442000]  # Schoonhoven
+delr = 50.            # zelfde als dx
+delc = 50.            # zelfde als dy
 
 # geef hier paths op
-subname = "heel_gebied"
+subname = "schoonhoven"
 datadir = '../../../data'
 figdir = os.path.join(model_ws, 'figure')
 cachedir = os.path.join(model_ws, 'cache')
@@ -52,8 +52,8 @@ cachedir = os.path.join(model_ws, 'cache')
 # files
 regis_nc = f'regis_ugw_{subname}.nc'
 dinofile = os.path.join(datadir, f'oc_dino_{subname}.pklz')
-water_shp = os.path.join(datadir, f"modflow_sfw_{subname}", "waterareas.shp")
-lines_shp = os.path.join(datadir, f"modflow_sfw_{subname}", "waterlines.shp")
+water_shp = os.path.join(datadir, f"modflow_sfw", "waterareas.shp")
+lines_shp = os.path.join(datadir, f"modflow_sfw", "waterlines.shp")
 rivobs_fname = os.path.join(datadir, '20200717_026.zip')
 
 # verander dit niet
@@ -408,7 +408,7 @@ sfw_grid = util.get_cache_gdf(use_cache, cachedir, "sfw_grid.pkl",
 # get the bottom height from the bathemetry-data
 mask = sfw_grid.has_bath == 1
 row, col = zip(*sfw_grid.loc[mask, 'cellid'])
-sfw_grid.loc[mask, 'BL'] = model_ds['bathymetry'].values[row,col]
+sfw_grid.loc[mask, 'BL'] = model_ds['bathymetry'].values[row, col]
 
 # do not parse if src_id_wla is NaN.
 # do not parse if bottom level is NaN
@@ -565,11 +565,13 @@ if (mask_slope.sum() > 0) and (add_riv_slope):
         # get associated water areas
         idf = sfw_slope_grid.loc[sfw_slope_grid.src_id_wl == src_id_wl]
 
+        if idf.empty:
+            continue
+
         # loop per cellid to determine rbot, stage, cond
         gr = idf.groupby(by="cellid")
         for cid, group in gr:
-            if cid == (41, 88):
-                raise Exception
+
             geom = shapely.ops.unary_union(group.geometry.values)
 
             # rbot
@@ -612,13 +614,13 @@ if (mask_slope.sum() > 0) and (add_riv_slope):
                                    maxbound=len(spd))
 
 # %% GHB (surface water from rws)
-mask = sfw_grid.src_wla == "rws_legger"
+mask = sfw_grid.src_wla == "rws_krw"
 gdf_rws = sfw_grid[mask].copy()
 if False:
     # make a plot of the surface_water
-    ax = gdf_rws.plot('src_id_wla',categorical=True, legend=True, colormap='tab20',
-                      legend_kwds={'prop': {"size":7.0}, 'loc':(0.6,0.34)},
-                      figsize=(10,10))
+    ax = gdf_rws.plot('src_id_wla', categorical=True, legend=True, colormap='tab20',
+                      legend_kwds={'prop': {"size": 7.0}, 'loc': (0.6, 0.34)},
+                      figsize=(10, 10))
     ax.figure.tight_layout(pad=0.0)
 gdf_rws = gdf_rws.set_index('src_id_wla')
 
