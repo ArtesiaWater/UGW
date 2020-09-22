@@ -621,41 +621,52 @@ if False:
     ax = gdf_rws.plot('src_id_wla', categorical=True, legend=True, colormap='tab20',
                       legend_kwds={'prop': {"size": 7.0}, 'loc': (0.6, 0.34)},
                       figsize=(10, 10))
+    df, meta = rws.read_waterinfo_zip(rivobs_fname, freq='d', metadata=True)
+    ax.plot(meta.x, meta.y, linestyle='none', marker='o')
+    for name, row in meta.iterrows():
+        ax.text(row.x, row.y, name)
     ax.figure.tight_layout(pad=0.0)
 gdf_rws = gdf_rws.set_index('src_id_wla')
 
 riv2stn = {}
-riv2stn['NL.1.Afgedamde Maas'] = ['Vuren']
-riv2stn['NL.1.Amsterdam-Rijnkanaal'] = ['Amsterdam Surinamekade', 'Weesp West',
-                                        'Maarssen', 'Nieuwegein',
-                                        'Wijk bij Duurstede kanaal',
-                                        'Tiel Kanaal']
-riv2stn['NL.1.Beneden Merwede'] = ['Dordrecht', 'Werkendam buiten']
-riv2stn['NL.1.Boven Merwede'] = ['Werkendam buiten', 'Vuren']
-riv2stn['NL.1.Boven-Rijn - Waal'] = ['Vuren', 'Zaltbommel', 'Tiel Waal',
-                                     'Dodewaard', 'Nijmegen haven']
-riv2stn['NL.1.Buiten IJ'] = ['Schellingwouderbrug']
-riv2stn['NL.1.Hollandsche IJssel'] = ['Krimpen a/d IJssel', 'Gouda brug']
-riv2stn['NL.1.Lek'] = ['Schoonhoven', 'Hagestein beneden', 'Hagestein boven',
-                       'Culemborg brug', 'Amerongen beneden',
-                       'Amerongen boven', 'Grebbe', 'Driel beneden']
-riv2stn['NL.1.Maas'] = ['Empel beneden', 'Lith dorp', 'Lith boven',
-                        'Megen dorp', 'Grave beneden']
-riv2stn['NL.1.Markermeer'] = ['Schellingwouderbrug', 'Hollandse brug']
-riv2stn['NL.1.Merwedekanaal - Vaartse Rijn - Stadsbuitengracht Utrecht'] = []
-riv2stn['NL.1.Nieuwe Merwede'] = ['Moerdijk', 'Werkendam buiten']
-riv2stn['NL.1.Noordzeekanaal'] = ['Amsterdam Surinamekade']
-riv2stn['NL.1.Pannerdensch Kanaal - Nederrijn - Lek'] = ['Krimpen a/d IJssel',
-                                                         'Krimpen a/d Lek',
-                                                         'Schoonhoven',
-                                                         'Hagestein beneden']
-riv2stn['NL.1.Randmeren-Oost'] = ['Nijkerk Nuldernauw', 'Elburg']
-riv2stn['NL.1.Randmeren-Zuid'] = ['Hollandse brug', 'Nijkerk west']
-riv2stn['NL.1.Sliedrechtse Biesbosch'] = ['Dordrecht']
-riv2stn['NL.14.Amsterdam-Rijnkanaal'] = riv2stn['NL.1.Amsterdam-Rijnkanaal']
-riv2stn['NL.14.Merwedekanaal - Vaartse Rijn - Stadsbuitengracht Utrecht'] = ['Doorslag']
-riv2stn['NL.31.Amsterdam-Rijnkanaal'] = riv2stn['NL.1.Amsterdam-Rijnkanaal']
-riv2stn['NL.8.Randmeren-Zuid'] = riv2stn['NL.1.Randmeren-Zuid']
+# Amsterdam-Rijnkanaal Betuwepand
+riv2stn['NL.1.NL86_5'] = ['Tiel Kanaal']
+# Amsterdam-Rijnkanaal Noordpand
+riv2stn['NL.1.NL86_6'] = ['Amsterdam Surinamekade', 'Weesp West', 'Maarssen',
+                          'Nieuwegein', 'Wijk bij Duurstede kanaal']
+# Noordzeekanaal
+riv2stn['NL.1.NL87_1'] = ['IJmuiden binnen', 'Buitenhuizen (kilometer 10)',
+                          'Amsterdam Surinamekade', 'Weesp West']
+# Bedijkte Maas
+riv2stn['NL.1.NL91BM'] = ['Lith boven', 'Megen dorp', 'Grave beneden']
+# Markermeer
+riv2stn['NL.1.NL92_MARKERMEER'] = ['Schellingwouderbrug', 'Hollandse brug']
+# 'Randmeren-oost'
+riv2stn['NL.1.NL92_RANDMEREN_OOST'] = ['Nijkerk Nuldernauw', 'Elburg']
+# 'Randmeren-zuid'
+riv2stn['NL.1.NL92_RANDMEREN_ZUID'] = ['Hollandse brug', 'Nijkerk west']
+# Nederrijn, Lek
+riv2stn['NL.1.NL93_7'] = ['Hagestein boven', 'Culemborg brug',
+                          'Amerongen beneden', 'Amerongen boven', 'Grebbe',
+                          'Driel beneden']
+# Bovenrijn, Waal
+riv2stn['NL.1.NL93_8'] = ['Vuren', 'Zaltbommel', 'Tiel Waal', 'Dodewaard',
+                          'Nijmegen haven']
+# stukje Boven- en Beneden Merwede
+riv2stn['NL.1.NL94_2'] = ['Dordrecht', 'Werkendam buiten', 'Vuren']
+# Boven- en Beneden Merwede
+riv2stn['NL.1.NL94_3'] = ['Dordrecht', 'Werkendam buiten', 'Vuren']
+# Oude Maas
+riv2stn['NL.1.NL94_4'] = ['Krimpen a/d IJssel', 'Krimpen a/d Lek',
+                        'Schoonhoven', 'Hagestein beneden']
+# Beneden Maas
+riv2stn['NL.1.NL94_5'] = ['Heesbeen', 'Empel beneden', 'Lith dorp']
+# Hollandsche IJssel
+riv2stn['NL.1.NL94_7'] = ['Krimpen a/d IJssel', 'Gouda brug']
+# stukje Amsterdam-Rijnkanaal Noordpand
+riv2stn['NL.14.NL86_6'] = ['Maarssen', 'Nieuwegein']
+# stukje Boven- en Beneden Merwede
+riv2stn['NL.9.NL94_3'] = ['Dordrecht', 'Werkendam buiten', 'Vuren']
 
 #gdfv = rws.get_river_polygons(extent)
 #gdfv['geometry'] = gdfv.intersection(box(extent[0], extent[1], extent[2], extent[3]))
