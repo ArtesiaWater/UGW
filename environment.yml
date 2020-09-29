@@ -1,0 +1,29 @@
+name: ugw
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.7
+  - ipython
+  - pip
+  - scipy
+  - numpy
+  - matplotlib
+  - xarray
+  - shapely
+  - pandas
+  - fiona
+  - gdal
+  - rasterio
+  - geopandas
+  - tqdm
+  - openpyxl
+  - requests
+  - owslib
+  - osgeo
+  - pip:
+    - xlrd
+    - zeep
+    - flopy
+    - rasterstats
+    - hydropandas
