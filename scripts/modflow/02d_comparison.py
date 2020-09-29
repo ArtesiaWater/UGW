@@ -1,14 +1,10 @@
 import os
 
-import matplotlib as mpl
+import flopy as fp
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from shapely.geometry import Polygon
-
-import flopy as fp
-import hydropandas as hpd
 
 sim_name = 'mfsim'
 model_names = ['nkrk_ind', 'nkrk_agg_dl']

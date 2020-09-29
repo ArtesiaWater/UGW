@@ -1,5 +1,6 @@
 import os
 import platform
+import sys
 from shutil import copyfile
 from timeit import default_timer
 
@@ -13,16 +14,15 @@ import rasterio
 import shapely
 import xarray as xr
 from matplotlib.patches import Patch
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-from tqdm import tqdm, tqdm_pandas
+from tqdm import tqdm
 from tqdm.auto import tqdm
 
-import sys
 sys.path.insert(2, "../../../NHFLO/NHFLOPY")
 from modules import ahn, layer_models, mgrid, mtime, rws, surface_water, util
 
-start = default_timer()
 # mpl.interactive(True)
+
+start = default_timer()
 
 # %% Model settings
 

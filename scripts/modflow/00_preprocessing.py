@@ -1,8 +1,9 @@
 import os
 import sys
-import xarray as xr
-import geopandas as gpd
 import zipfile
+
+import geopandas as gpd
+import xarray as xr
 
 sys.path.append("../../../NHFLO/NHFLOPY")
 from modules import mgrid, util

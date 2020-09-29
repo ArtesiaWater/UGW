@@ -1,14 +1,13 @@
 import os
 
+import flopy as fp
+import hydropandas as hpd
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from shapely.geometry import Polygon
-
-import flopy as fp
-import hydropandas as hpd
 
 model_name = 'schnhvn_ind'
 model_ws = f'../../models/{model_name}'
