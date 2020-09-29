@@ -22,6 +22,7 @@ dependencies:
   - owslib
   - osgeo
   - pip:
+    - pyproj
     - xlrd
     - zeep
     - flopy

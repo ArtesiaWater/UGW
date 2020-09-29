@@ -26,17 +26,14 @@ start = default_timer()
 
 # %% Model settings
 
-use_cache = True
+# modelnaam en map
 model_name = 'ugw_agg_dl'
 model_ws = f'../../model/{model_name}'
 
-# method
-# 'individual', 'de_lange', 'area_weighted' or 'max_area':
-agg_method = "individual"
-add_riv_slope = True  # add sloping surface water from line shapefile
-surfwat_pkgs = []  # collect surface water packages in this list
+# method for parsing surface water
+agg_method = "individual"  # 'individual', 'de_lange', 'area_weighted' or 'max_area'
 
-# grid
+# extent en gridgrootte
 # extent = [115900, 121000, 436600, 442000]  # Schoonhoven
 # extent = [151990, 172800, 467700, 489300.]  # Nijkerk
 extent = None  # extent is determined from surface-water shape
@@ -44,9 +41,10 @@ extent = None  # extent is determined from surface-water shape
 delr = 500.            # zelfde als dx
 delc = 500.            # zelfde als dy
 
-# geef hier paths op
+# geef hier paths op en of de cache gebruikt moet worden
 datadir = '../../data'
 figdir = os.path.join(model_ws, 'figure')
+use_cache = True
 cachedir = os.path.join(model_ws, 'cache')
 
 # files
@@ -64,6 +62,9 @@ if not os.path.exists(figdir):
 
 if not os.path.exists(cachedir):
     os.mkdir(cachedir)
+
+surfwat_pkgs = []  # collect surface water packages in this list
+add_riv_slope = True  # add sloping surface water from line shapefile
 
 f = open(os.path.join(model_ws, f"{model_name}_log.txt"), "w")
 
@@ -714,7 +715,7 @@ if plot_input:
         except:
             pass
         mv.plot_bc("GHB", color="lightblue")
-    
+
     sfw.plot(color="red", alpha=0.5, ax=ax, zorder=10)
 
     patches = []
