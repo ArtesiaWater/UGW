@@ -1,4 +1,4 @@
-# UGW
+# UGW: "Bouwsteen Oppervlaktewater"
 
 Python scripts voor oppervlaktewater-component Utrechts GrondWater model (UGW)
 
