@@ -1,57 +1,56 @@
 import os
+import platform
 from shutil import copyfile
 from timeit import default_timer
-import platform
 
+import flopy as fp
 import geopandas as gpd
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import rasterio
-import xarray as xr
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 import shapely
-from tqdm import tqdm
+import xarray as xr
+from matplotlib.patches import Patch
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+from tqdm import tqdm, tqdm_pandas
+from tqdm.auto import tqdm
 
-import flopy as fp
-# import modules from NHFLO repo (for now)
 import sys
-sys.path.insert(2, "../../../../NHFLO/NHFLOPY")
-from modules import ahn, mgrid, mtime, rws, subsurface, surface_water, util
-
+sys.path.insert(2, "../../../NHFLO/NHFLOPY")
+from modules import ahn, layer_models, mgrid, mtime, rws, surface_water, util
 
 start = default_timer()
-mpl.interactive(True)
+# mpl.interactive(True)
 
 # %% Model settings
 
 use_cache = True
-model_ws = '../../model/schoonhoven_ind'
-model_name = 'schnhvn_ind'
+model_name = 'ugw_agg_dl'
+model_ws = f'../../model/{model_name}'
 
 # method
-riv_method = "individual"  # individual or aggregated
-agg_method = "delange"  # 'delange', 'area' or 'max'
+# 'individual', 'de_lange', 'area_weighted' or 'max_area':
+agg_method = "individual"
 add_riv_slope = True  # add sloping surface water from line shapefile
 surfwat_pkgs = []  # collect surface water packages in this list
 
 # grid
+# extent = [115900, 121000, 436600, 442000]  # Schoonhoven
+# extent = [151990, 172800, 467700, 489300.]  # Nijkerk
 extent = None  # extent is determined from surface-water shape
-# extent = [105900., 172800., 425400., 489300.] # entire model area
-extent = [116000, 120000, 438000, 442000]  # Schoonhoven
-delr = 50.            # zelfde als dx
-delc = 50.            # zelfde als dy
+
+delr = 500.            # zelfde als dx
+delc = 500.            # zelfde als dy
 
 # geef hier paths op
-subname = "schoonhoven"
-datadir = '../../../data'
+datadir = '../../data'
 figdir = os.path.join(model_ws, 'figure')
 cachedir = os.path.join(model_ws, 'cache')
 
 # files
-regis_nc = f'regis_ugw_{subname}.nc'
-dinofile = os.path.join(datadir, f'oc_dino_{subname}.pklz')
+regis_nc = f'regis_ugw.nc'
 water_shp = os.path.join(datadir, f"modflow_sfw", "waterareas.shp")
 lines_shp = os.path.join(datadir, f"modflow_sfw", "waterlines.shp")
 rivobs_fname = os.path.join(datadir, '20200717_026.zip')
@@ -91,20 +90,24 @@ sfw = sfw.loc[mask.drop_duplicates().index]
 
 # read water lines shapefile
 try:
-    slope_lines = gpd.read_file(lines_shp)
+    if extent is None:
+        slope_lines = gpd.read_file(lines_shp)
+    else:
+        bbox = (extent[0], extent[2], extent[1], extent[3])
+        slope_lines = gpd.read_file(lines_shp, bbox=bbox)
 except:
     add_riv_slope = False
 
-if add_riv_slope:
-    # TODO: this should not be necessary, but since has_slope isn't correct in
-    # source we need to set it manually.
-    mask_slopes = sfw.src_id_wl.isin(slope_lines.src_id_wl)
-    sfw.loc[mask_slopes, "has_slope"] = 1
+# if add_riv_slope:
+#     # TODO: this should not be necessary, but since has_slope isn't correct in
+#     # source we need to set it manually.
+#     mask_slopes = sfw.src_id_wl.isin(slope_lines.src_id_wl)
+#     sfw.loc[mask_slopes, "has_slope"] = 1
 
-# check for odd rbots
-mask = (sfw["BL"] > sfw[["ZP", "WP"]].min(axis=1))
-if mask.sum() > 0:
-    print(f"Warning! RBOT above waterlevel in {mask.sum()} cases!")
+# # check for odd rbots
+# mask = (sfw["BL"] > sfw[["ZP", "WP"]].min(axis=1))
+# if mask.sum() > 0:
+#     print(f"Warning! RBOT above waterlevel in {mask.sum()} cases!")
 
 # %% Time discretization
 # general
@@ -138,9 +141,10 @@ tdis_perioddata = [(model_ds.perlen,
 
 # %% SIM
 # Create the Flopy simulation object
-exe_name = r'..\..\..\tools\mf6'
+exe_name = '../../tools/mf6'
 if platform.system() in 'Windows':
     exe_name += '.exe'
+
 sim = fp.mf6.MFSimulation(sim_name=model_name,
                           exe_name=exe_name,
                           version='mf6',
@@ -204,15 +208,15 @@ model_ds = mgrid.update_model_ds_from_ml_layer_ds(model_ds, regis_ds,
                                                   verbose=True)
 model_ds = mgrid.add_idomain_from_bottom_to_dataset(regis_ds['bottom'],
                                                     model_ds)
-model_ds = subsurface.add_top_bot_to_model_ds(regis_ds,
-                                              model_ds,
-                                              gridtype='structured')
+model_ds = layer_models.add_top_bot_to_model_ds(regis_ds,
+                                                model_ds,
+                                                gridtype='structured')
 
 # %% flow parameters
-anisotropy = 10
 confined = True
 fill_value_kh = 1.
 fill_value_kv = 0.1
+anisotropy = 10
 
 # berekenen
 if confined:
@@ -220,11 +224,11 @@ if confined:
 else:
     icelltype = 1
 
-model_ds = subsurface.add_kh_kv_from_ml_layer_to_dataset(regis_ds,
-                                                         model_ds,
-                                                         anisotropy,
-                                                         fill_value_kh,
-                                                         fill_value_kv)
+model_ds = layer_models.add_kh_kv_from_ml_layer_to_dataset(regis_ds,
+                                                           model_ds,
+                                                           anisotropy,
+                                                           fill_value_kh,
+                                                           fill_value_kv)
 
 
 # %% DIS
@@ -365,13 +369,13 @@ def check_surface_water_shape(sfw):
     mask_riv = ((sfw.SUB == 1) &
                 (sfw.has_bath == 0) &
                 (sfw.has_slope == 0) &
-                (sfw.src_wla != "rws_legger") &
+                (sfw.src_wla != "rws_krw") &
                 (~sfw.BL.isna()) &
                 (~sfw.src_id_wla.isna()))
     mask_drn = ((sfw.SUB == 0) &
                 (sfw.has_bath == 0) &
                 (sfw.has_slope == 0) &
-                (sfw.src_wla != "rws_legger") &
+                (sfw.src_wla != "rws_krw") &
                 (~sfw.BL.isna()) &
                 (~sfw.src_id_wla.isna()))
     mask_slope = ((sfw.has_slope == 1) &
@@ -396,6 +400,9 @@ def check_surface_water_shape(sfw):
 
 check_surface_water_shape(sfw)
 
+# get boundary type
+sfw["bc"] = surface_water.get_bc_type(sfw)
+
 # intersect with grid (or load from cache if cached)
 sfw_grid = util.get_cache_gdf(use_cache, cachedir, "sfw_grid.pkl",
                               surface_water.gdf2grid, model_ds=model_ds,
@@ -405,89 +412,48 @@ sfw_grid = util.get_cache_gdf(use_cache, cachedir, "sfw_grid.pkl",
 
 # %% RIV/DRN for surface water
 
-# get the bottom height from the bathemetry-data
-mask = sfw_grid.has_bath == 1
-row, col = zip(*sfw_grid.loc[mask, 'cellid'])
-sfw_grid.loc[mask, 'BL'] = model_ds['bathymetry'].values[row, col]
+# get the bottom height from the bathymetry-data
+mask_bath = sfw_grid.bc == "ghb"
+row, col = zip(*sfw_grid.loc[mask_bath, 'cellid'])
+sfw_grid.loc[mask_bath, 'BL'] = model_ds['bathymetry'].values[row, col]
 
 # do not parse if src_id_wla is NaN.
 # do not parse if bottom level is NaN
-mask_riv = ((sfw_grid.SUB == 1) &
-            (sfw_grid.has_slope == 0) &
-            (sfw_grid.src_wla != "rws_legger") &
-            (~sfw_grid.BL.isna()) &
-            (~sfw_grid.src_id_wla.isna()))
-mask_drn = ((sfw_grid.SUB == 0) &
-            (sfw_grid.has_slope == 0) &
-            (sfw_grid.src_wla != "rws_legger") &
-            (~sfw_grid.BL.isna()) &
-            (~sfw_grid.src_id_wla.isna()))
+mask_riv = sfw_grid["bc"] == "riv"
+mask_drn = sfw_grid["bc"] == "drn"
+
 sfw_riv = sfw_grid.loc[mask_riv]
 sfw_drn = sfw_grid.loc[mask_drn]
 
-if riv_method == "aggregated":
-    boundnames = False
-
-    # riv
-    if not sfw_riv.empty:
-        riv_data = surface_water.aggregate_surface_water(
-            sfw_riv, model_ds=model_ds, method=agg_method)
-        riv_data2 = riv_data.loc[~riv_data.ZP.isna()]
-        riv_spd = surface_water.build_spd(riv_data2, "RIV", model_ds, f)
-    else:
-        riv_spd = []
-
-    # drn
-    if not sfw_drn.empty:
-        drn_data = surface_water.aggregate_surface_water(
-            sfw_drn, model_ds=model_ds, method=agg_method)
-        drn_data2 = drn_data.loc[~drn_data.ZP.isna()]
-        drn_spd = surface_water.build_spd(drn_data2, "DRN", model_ds, f)
-    else:
-        drn_spd = []
-
-elif riv_method == "individual":
-
-    cbot = 1.0  # days
-    boundnames = False  # option for later
-
-    riv_data = sfw_riv.copy()
-    drn_data = sfw_drn.copy()
-
-    # make name empty string if name does not exist
-    riv_data.loc[sfw_riv['name'].isna(), 'name'] = ''
-    drn_data.loc[drn_data['name'].isna(), 'name'] = ''
-
-    # cond
-    riv_data["cond"] = riv_data.area / cbot
-    drn_data["cond"] = drn_data.area / cbot
-
-    # stage
-    riv_data["name_largest"] = riv_data.src_id_wla
-    drn_data["name_largest"] = drn_data.src_id_wla
-
-    # build spd
-    riv_spd = surface_water.build_spd(
-        riv_data.set_index("cellid"), "RIV", model_ds, f)
-    drn_spd = surface_water.build_spd(
-        drn_data.set_index("cellid"), "DRN", model_ds, f)
-
+# riv
+if not sfw_riv.empty:
+    riv_data = surface_water.aggregate_surface_water(
+        sfw_riv, model_ds=model_ds, method=agg_method)
+    riv_data2 = riv_data.loc[~riv_data["stage"].isna()]
+    riv_spd = surface_water.build_spd(riv_data2, "RIV", model_ds, f)
 else:
-    raise ValueError(
-        f"Invalid method for creating RIV package: '{riv_method}'")
+    riv_spd = []
+
+# drn
+if not sfw_drn.empty:
+    drn_data = surface_water.aggregate_surface_water(
+        sfw_drn, model_ds=model_ds, method=agg_method)
+    drn_data2 = drn_data.loc[~drn_data["stage"].isna()]
+    drn_spd = surface_water.build_spd(drn_data2, "DRN", model_ds, f)
+else:
+    drn_spd = []
 
 if len(riv_spd) > 0:
     riv = fp.mf6.ModflowGwfriv(gwf,
                                stress_period_data=riv_spd,
-                               boundnames=boundnames,
                                save_flows=True,
-                               maxbound=len(riv_spd))
+                               maxbound=len(riv_spd),
+                               pname="riv_0")
     surfwat_pkgs.append("RIV")
 
 if len(drn_spd) > 0:
     drn = fp.mf6.ModflowGwfdrn(gwf,
                                stress_period_data=drn_spd,
-                               boundnames=boundnames,
                                save_flows=True,
                                maxbound=len(drn_spd))
     surfwat_pkgs.append("DRN")
@@ -497,7 +463,6 @@ mstart = pd.Timestamp(start_time)
 mend = model_ds.time.isel(time=-1).to_pandas()
 
 if not steady_state:
-
     if len(riv_spd) > 0:
         # RIV timeseries
         tseries_list = surface_water.create_timeseries(riv_data, mstart, mend)
@@ -535,8 +500,8 @@ if not steady_state:
 # %% RIV slope
 
 # get water areas per gridcell with slope
-mask_slope = ((sfw_grid.has_slope == 1) &
-              (~sfw_grid.loc[:, ["ZP", "WP"]].isna().any(axis=1)))
+mask_slope = sfw_grid["bc"] == "riv_slp"
+
 if (mask_slope.sum() > 0) and (add_riv_slope):
 
     sfw_grid["name_largest"] = sfw_grid.src_id_wla.apply(
@@ -586,6 +551,7 @@ if (mask_slope.sum() > 0) and (add_riv_slope):
             stage = group.loc[idxmax, ["ZP", "WP"]].mean()
             if np.isnan(stage):
                 continue
+
             if stage < rbot:
                 stage = rbot
 
@@ -608,14 +574,16 @@ if (mask_slope.sum() > 0) and (add_riv_slope):
 
     # create riv package
     riv_slp = fp.mf6.ModflowGwfriv(gwf,
-                                   filename=f"{model_name}_riv_slp",
+                                   filename=f"{model_name}_slp.riv",
                                    stress_period_data=spd,
                                    save_flows=True,
-                                   maxbound=len(spd))
+                                   maxbound=len(spd),
+                                   pname="riv_1")
 
 # %% GHB (surface water from rws)
 mask = sfw_grid.src_wla == "rws_krw"
 gdf_rws = sfw_grid[mask].copy()
+
 if False:
     # make a plot of the surface_water
     ax = gdf_rws.plot('src_id_wla', categorical=True, legend=True, colormap='tab20',
@@ -626,6 +594,7 @@ if False:
     for name, row in meta.iterrows():
         ax.text(row.x, row.y, name)
     ax.figure.tight_layout(pad=0.0)
+
 gdf_rws = gdf_rws.set_index('src_id_wla')
 
 riv2stn = {}
@@ -658,7 +627,7 @@ riv2stn['NL.1.NL94_2'] = ['Dordrecht', 'Werkendam buiten', 'Vuren']
 riv2stn['NL.1.NL94_3'] = ['Dordrecht', 'Werkendam buiten', 'Vuren']
 # Oude Maas
 riv2stn['NL.1.NL94_4'] = ['Krimpen a/d IJssel', 'Krimpen a/d Lek',
-                        'Schoonhoven', 'Hagestein beneden']
+                          'Schoonhoven', 'Hagestein beneden']
 # Beneden Maas
 riv2stn['NL.1.NL94_5'] = ['Heesbeen', 'Empel beneden', 'Lith dorp']
 # Hollandsche IJssel
@@ -668,9 +637,9 @@ riv2stn['NL.14.NL86_6'] = ['Maarssen', 'Nieuwegein']
 # stukje Boven- en Beneden Merwede
 riv2stn['NL.9.NL94_3'] = ['Dordrecht', 'Werkendam buiten', 'Vuren']
 
-#gdfv = rws.get_river_polygons(extent)
-#gdfv['geometry'] = gdfv.intersection(box(extent[0], extent[1], extent[2], extent[3]))
-#gdfv[~gdfv.is_empty].reset_index().plot('OWMNAAM', legend=True, cmap='tab20')
+# gdfv = rws.get_river_polygons(extent)
+# gdfv['geometry'] = gdfv.intersection(box(extent[0], extent[1], extent[2], extent[3]))
+# gdfv[~gdfv.is_empty].reset_index().plot('OWMNAAM', legend=True, cmap='tab20')
 
 if not os.path.isfile(rivobs_fname):
     msg = ('Connot find file {0}. Please run below code (after changing '
@@ -721,127 +690,175 @@ if not success:
     msg = "Model did not run succesfully!"
     raise Exception(msg)
 
-# %% Post-processing
-
-# open head file
-fname = os.path.join(model_ws, headfile)
-hds = fp.utils.HeadFile(fname)
-h = hds.get_data(kstpkper=(0, 0))
-h[h > 1e5] = np.nan
-
-# open budgetfile
-fname = os.path.join(model_ws, budgetfile)
-cbc = fp.utils.CellBudgetFile(fname)
-
-t = 0
-spdis = cbc.get_data(text="SPDIS")
-
-q3D = 0.0
-
-for txt in surfwat_pkgs:
-    q = cbc.get_data(kstpkper=(0, 0), text=txt)[t]
-    q3Di = cbc.create3D(q, gwf.modelgrid.nlay, gwf.modelgrid.nrow,
-                        gwf.modelgrid.ncol)
-    q3D += q3Di.data
-
-qx, qy, qz = fp.utils.postprocessing.get_specific_discharge(gwf,
-                                                            fname,
-                                                            precision="double")
-
-# %% plot heads
-
-fig, ax = plt.subplots(1, 1, figsize=(14, 10))
-mapview = fp.plot.PlotMapView(model=gwf)
-qm = mapview.plot_array(h[0], cmap="RdBu")
-# qv = mapview.plot_vector(qx, qy, istep=1, jstep=1, normalize=False,
-#                          scale=2, alpha=0.75, width=.00175,
-#                          headwidth=3, headlength=3, headaxislength=2,
-#                          pivot="mid")
-
-divider = make_axes_locatable(ax)
-cax = divider.append_axes('right', size='3%', pad=0.05)
-cbar = plt.colorbar(qm, cax=cax)
-cbar.set_label("head (m NAP)")
-ax.set_title("Grondwaterstand en stroming")
-fig.savefig(os.path.join(figdir, "head_layer0.png"),
-            bbox_inches="tight", dpi=150)
-
-# %% plot river leakage
-
-fig, ax = plt.subplots(1, 1, figsize=(14, 10))
-mapview = fp.plot.PlotMapView(model=gwf)
-qzmm = q3D / (delr * delc) * 1e3
-qzmax = np.max(np.abs(qzmm[0]))
-qm = mapview.plot_array(qzmm, cmap="RdBu_r", vmin=-qzmax, vmax=qzmax)
-divider = make_axes_locatable(ax)
-cax = divider.append_axes('right', size='3%', pad=0.05)
-cbar = plt.colorbar(qm, cax=cax)
-cbar.set_label("Kwel/Infiltratie (mm/d)")
-fig.savefig(os.path.join(figdir, "river_leakage.png"),
-            bbox_inches="tight", dpi=150)
-
-# %% compare to obs
-
-if os.path.isfile(dinofile):
-
-    oc_dino = pd.read_pickle(dinofile)
-    oc_dino[['start_date', 'end_date']
-            ] = oc_dino.stats.get_first_last_obs_date()
-    oc_dino = oc_dino[oc_dino['end_date'] > model_ds.time[0].data]
-    oc_dino.loc[:, 'modellayer'] = oc_dino.gwobs.get_modellayers(
-        gwf, verbose=False)
-
-    counter = 0
-    for i, row in oc_dino.iterrows():
-        x = row['x']
-        y = row['y']
-
-        lay = row['modellayer']
-        if np.isnan(lay):
-            continue
-        else:
-            lay = int(lay)
-
-        # get observations in model period
-        obs_plot = row['obs'].loc[model_ds.time.data[0]:model_ds.time.data[-1],
-                                  'stand_m_tov_nap']
-        obs_plot.columns = [i]
-
-        if obs_plot.dropna().empty:
-            continue
-
-        # plot if there are any observations
-        if not obs_plot.empty:
-            if ((obs_plot.index[-1] > model_ds.time.data[0]) and
-                    (obs_plot.index[0] < model_ds.time.data[-1])):
-
-                # create figure
-                fig, ax = plt.subplots(figsize=(12, 6))
-
-                # get model heads
-                idx = gwf.modelgrid.intersect(x, y)
-                hds_idx = hds.get_ts((lay,) + idx)[:, 1]
-                hds_df = pd.DataFrame(index=pd.to_datetime(model_ds.time.data),
-                                      data={f'model head lay {lay}': hds_idx})
-
-                # plot heads
-                hds_df.plot(ax=ax, marker='o', lw=0.2, x_compat=True)
-
-                # plot obs
-                obs_day = obs_plot.groupby(obs_plot.index).mean()
-                obs_day.plot(ax=ax, marker='.', lw=1.0, markersize=5,
-                             label=i, x_compat=True)
-
-                # set axes
-                ax.set_xlim(model_ds.time.data[0], model_ds.time.data[-1])
-                ax.legend(loc=2)
-                ax.grid(b=True)
-                ax.set_ylabel("Stijghoogte (m NAP)")
-
-                fig.savefig(os.path.join(figdir, f"model_vs_{i}.png"),
-                            bbox_inches="tight", dpi=150)
-                plt.close(fig)
-
 # %% End script
 end = default_timer()
 print(f"Elapsed time: {end-start:.1f} s")
+
+# %% plot input
+plot_input = False
+
+if plot_input:
+    # %% Plot model BC
+    fig, ax = plt.subplots(1, 1, figsize=(12, 12))
+    ax.set_aspect("equal", adjustable="box")
+
+    for ilay in np.arange(gwf.modelgrid.nlay):
+        mv = fp.plot.PlotMapView(gwf, layer=ilay, ax=ax)
+        mv.plot_bc("DRN", color="yellow")
+        try:
+            mv.plot_bc("RIV_0", color="navy")
+        except:
+            pass
+        try:
+            mv.plot_bc("RIV_1", color="blue")
+        except:
+            pass
+        mv.plot_bc("GHB", color="lightblue")
+    
+    sfw.plot(color="red", alpha=0.5, ax=ax, zorder=10)
+
+    patches = []
+    colors = ["red", "lightblue", "yellow", "navy", "blue"]
+    labels = ["source data", "has bathymetry", "drainage",
+              "river", "sloping river"]
+
+    for lbl, c in zip(labels, colors):
+        patches.append(Patch(facecolor=c, label=lbl, edgecolor=c))
+    ax.legend(patches, labels, loc="upper left", framealpha=1.0)
+
+    plt.yticks(rotation=90, va="center")
+    ax.set_xlabel("X (m RD)")
+    ax.set_ylabel("Y (m RD)")
+
+    ax.set_title("Oppervlaktewater randvoorwaarden in model")
+    fig.tight_layout()
+    fig.savefig(os.path.join(figdir, "BC_types_in_gwmodel.png"),
+                bbox_inches="tight", dpi=150)
+    plt.close(fig)
+
+    # %% Plot BC types in source data
+
+    mask_riv = ((sfw.SUB == 1) &
+                (sfw.has_bath == 0) &
+                (sfw.has_slope == 0) &
+                (sfw.src_wla != "rws_krw") &
+                (~sfw.BL.isna()) &
+                (~sfw.src_id_wla.isna()))
+    mask_drn = ((sfw.SUB == 0) &
+                (sfw.has_bath == 0) &
+                (sfw.has_slope == 0) &
+                (sfw.src_wla != "rws_krw") &
+                (~sfw.BL.isna()) &
+                (~sfw.src_id_wla.isna()))
+    mask_slope = ((sfw.has_slope == 1) &
+                  (~sfw.loc[:, ["ZP", "WP"]].isna().any(axis=1)))
+    mask_bath = sfw.has_bath == 1
+    mask_all = mask_riv | mask_drn | mask_slope | mask_bath
+
+    maskrivdrn = (sfw.has_bath == 0) & (sfw.has_slope == 0)
+    mask_bl_nan = sfw.loc[:, "BL"].isna()
+    mask_src_nan = sfw.loc[:, "src_id_wla"].isna()
+    mask_zpwp_nan = sfw.loc[sfw.has_slope ==
+                            1, ["ZP", "WP"]].isna().any(axis=1)
+
+    fig, ax = plt.subplots(1, 1, figsize=(12, 12), dpi=150)
+    ax.set_aspect("equal", adjustable="box")
+
+    sfw.loc[mask_bath].plot(color="lightblue", ax=ax)  # bathymetry
+    sfw.loc[mask_drn].plot(color="orange", ax=ax)  # DRN, cannot supply water
+    sfw.loc[mask_riv].plot(color="navy", ax=ax)  # RIV_0, can supply water
+    sfw.loc[mask_slope].plot(color="blue", ax=ax)  # RIV_1, has slope
+    sfw.loc[~mask_all].plot(color="red", ax=ax)  # NOT PARSED!
+
+    patches = []
+    colors = ["lightblue", "orange", "navy", "blue", "red"]
+    labels = ["has bathymetry", "drainage",
+              "river", "sloping river", "not parsed"]
+    for lbl, c in zip(labels, colors):
+        patches.append(Patch(facecolor=c, label=lbl, edgecolor=c))
+
+    xmin, ymin, xmax, ymax = sfw.total_bounds
+
+    ax.legend(patches, labels, loc="best")
+    ax.set_xlim(xmin, xmax)
+    ax.set_ylim(ymin, ymax)
+    plt.yticks(rotation=90, va="center")
+    ax.set_xlabel("X (m RD)")
+    ax.set_ylabel("Y (m RD)")
+    fig.tight_layout()
+    fig.savefig(os.path.join(figdir, "BC_types_in_source_data.png"),
+                bbox_inches="tight", dpi=150)
+    plt.close(fig)
+
+    # %% No bottom level
+    fig, ax = plt.subplots(1, 1, figsize=(12, 12))
+    ax.set_aspect("equal", adjustable="box")
+
+    sfw.plot(color="gray", alpha=0.8, ax=ax)
+    sfw.loc[mask_bl_nan & maskrivdrn].plot(color="red", ax=ax)
+    xmin, ymin, xmax, ymax = sfw.total_bounds
+    ax.set_xlim(xmin, xmax)
+    ax.set_ylim(ymin, ymax)
+    plt.yticks(rotation=90, va="center")
+    ax.set_xlabel("X (m RD)")
+    ax.set_ylabel("Y (m RD)")
+    ax.set_title("No 'bottom_level' defined")
+    fig.tight_layout()
+    fig.savefig(os.path.join(figdir, "BC_no_bottom_levels.png"),
+                bbox_inches="tight", dpi=150)
+    plt.close(fig)
+
+    # %% No src_id_wla (no information about summer/winter levels)
+    fig, ax = plt.subplots(1, 1, figsize=(12, 12))
+    ax.set_aspect("equal", adjustable="box")
+    sfw.plot(color="gray", alpha=0.8, ax=ax)
+    sfw.loc[mask_src_nan & maskrivdrn].plot(color="red", ax=ax)
+    xmin, ymin, xmax, ymax = sfw.total_bounds
+    ax.set_xlim(xmin, xmax)
+    ax.set_ylim(ymin, ymax)
+    plt.yticks(rotation=90, va="center")
+    ax.set_xlabel("X (m RD)")
+    ax.set_ylabel("Y (m RD)")
+    ax.set_title("No 'src_id_wla' defined (= no water levels)")
+    fig.tight_layout()
+    fig.savefig(os.path.join(figdir, "BC_no_waterlevel-areas.png"),
+                bbox_inches="tight", dpi=150)
+    plt.close(fig)
+
+    # %% Conductance NaN or negative in DRN/RIV
+    maskcondnan_drn = drn_data.cond.isna() | (drn_data.cond < 0)
+    idx_condnan_drn = drn_data.loc[maskcondnan_drn].index.unique()
+
+    if not sfw_riv.empty:
+        maskcondnan_riv = riv_data.cond.isna() | (riv_data.cond < 0)
+        idx_condnan_riv = riv_data.loc[maskcondnan_riv].index.unique()
+
+    fig, ax = plt.subplots(1, 1, figsize=(12, 12))
+    ax.set_aspect("equal", adjustable="box")
+
+    sfw_grid.plot(color="gray", alpha=0.8, ax=ax)
+    sfw_grid.loc[sfw_grid["cellid"].isin(
+        idx_condnan_drn)].plot(color="orange", ax=ax)
+    if not sfw_riv.empty:
+        sfw_grid.loc[sfw_grid["cellid"].isin(
+            idx_condnan_riv)].plot(color="red", ax=ax)
+
+    patches = []
+    colors = ["orange", "red"]
+    labels = ["DRN conductance = NaN or < 0", "RIV conductance = NaN < 0"]
+    for lbl, c in zip(labels, colors):
+        patches.append(Patch(facecolor=c, label=lbl, edgecolor=c))
+    ax.legend(patches, labels, loc="best")
+
+    xmin, ymin, xmax, ymax = sfw.total_bounds
+    ax.set_xlim(xmin, xmax)
+    ax.set_ylim(ymin, ymax)
+
+    plt.yticks(rotation=90, va="center")
+    ax.set_xlabel("X (m RD)")
+    ax.set_ylabel("Y (m RD)")
+
+    fig.tight_layout()
+    fig.savefig(os.path.join(figdir, "BC_conductance_nan_or_negative.png"),
+                bbox_inches="tight", dpi=150)
+    plt.close(fig)

@@ -1,14 +1,17 @@
 import os
+
 import matplotlib as mpl
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+from shapely.geometry import Polygon
 
 import flopy as fp
+import hydropandas as hpd
 
-
-model_ws = '../../model/schoonhoven_agg'
-model_name = 'schoonhoven_agg'
+model_name = 'schnhvn_ind'
+model_ws = f'../../models/{model_name}'
 sim_name = 'mfsim'
 figdir = os.path.join(model_ws, 'figure')
 headfile = f'{model_name}.hds'
@@ -24,7 +27,7 @@ delc = gwf.dis.delc.data[0]
 # open head file
 fname = os.path.join(model_ws, headfile)
 hds = fp.utils.HeadFile(fname)
-h = hds.get_data(kstpkper=(0, 0))
+h = hds.get_alldata()
 h[h > 1e5] = np.nan
 
 # open budgetfile
@@ -53,18 +56,22 @@ qx, qy, qz = fp.utils.postprocessing.get_specific_discharge(gwf,
 # %% plot head and quiver
 fig, ax = plt.subplots(1, 1, figsize=(14, 10))
 mapview = fp.plot.PlotMapView(model=gwf)
-qm = mapview.plot_array(h[0], cmap="RdBu", vmin=-2, vmax=2)
-qv = mapview.plot_vector(qx, qy, istep=1, jstep=1, normalize=False,
-                         scale=2, alpha=0.75, width=.00175,
-                         headwidth=3, headlength=3, headaxislength=2,
-                         pivot="mid")
+
+lay = 0
+lim = np.nanmax(np.abs(h[:, lay]))
+
+qm = mapview.plot_array(h[0], cmap="RdBu", vmin=-lim, vmax=lim)
+# qv = mapview.plot_vector(qx, qy, istep=1, jstep=1, normalize=False,
+#                          scale=2, alpha=0.75, width=.00175,
+#                          headwidth=3, headlength=3, headaxislength=2,
+#                          pivot="mid")
 
 divider = make_axes_locatable(ax)
 cax = divider.append_axes('right', size='3%', pad=0.05)
 cbar = plt.colorbar(qm, cax=cax)
 cbar.set_label("head (m NAP)")
 ax.set_title("Grondwaterstand en stroming")
-fig.savefig(os.path.join(figdir, "head_layer0_quiver.png"),
+fig.savefig(os.path.join(figdir, f"head_layer{lay}.png"),
             bbox_inches="tight", dpi=150)
 
 # fig, ax = plt.subplots(1, 1, figsize=(14, 10))
@@ -97,7 +104,7 @@ fig.savefig(os.path.join(figdir, "river_leakage.png"),
             bbox_inches="tight", dpi=150)
 
 
-#%% show riv and shape
+# %% show riv and shape
 # import geopandas as gpd
 # datadir = '../../../data'
 # water_shp = os.path.join(datadir, "modflow_sfw_schoonhoven", "waterareas.shp")
@@ -111,3 +118,82 @@ fig.savefig(os.path.join(figdir, "river_leakage.png"),
 # sfw.plot(color="CornFlowerBlue", zorder=10, ax=ax)
 
 # fig.savefig("RIV_vs_shape_l1.png", bbox_inches="tight", dpi=150)
+
+# %% load piezometers
+xmin, xmax, ymin, ymax = gwf.modelgrid.extent
+model_extent = Polygon(
+    [(xmin, ymin), (xmin, ymax), (xmax, ymax), (xmax, ymin)])
+
+dinodir = "../../data/piezometers"
+
+files = [f for f in os.listdir(dinodir) if f.startswith("dino_download__")]
+
+collections = []
+parsed_files = []
+
+for f in files:
+    extent_str = f.split("__")[-1].split(".")[0]
+    xmin, ymin, xmax, ymax = np.array(extent_str.split("_"), dtype=np.float)
+    p = Polygon([(xmin, ymin), (xmin, ymax), (xmax, ymax), (xmax, ymin)])
+
+    if p.intersects(model_extent):
+        parsed_files.append(f)
+        collections.append(pd.read_pickle(
+            os.path.join(dinodir, f), compression="zip"))
+
+pbc = pd.concat(collections, axis=0)
+
+# at least 3 consecutive years of 12 observations
+mask = np.any(pbc.stats.consecutive_obs_years() > 3., axis=0)
+pbc = pbc.loc[mask]
+
+pbc["modellayer"] = pbc.gwobs.get_modellayers(gwf, verbose=True)
+
+if not pbc["modellayer"].isna().all():
+    hobs_model = hpd.ObsCollection.from_modflow(pbc, gwf, h,
+                                                [gwf.modeltime.start_datetime])
+    hobs_model["hmod"] = hobs_model.stats.mean_in_period(col=0)
+
+pbc["hobs"] = pbc.stats.mean_in_period()
+
+colors = {}
+cmap = mpl.cm.get_cmap("tab20")
+norm = mpl.colors.Normalize(vmin=-0.5, vmax=19.5)
+for i, mlay in enumerate(pbc["modellayer"].dropna().unique()):
+    colors[mlay] = cmap(i)
+
+
+def apply_colors(s):
+    if np.isnan(s):
+        return (0, 0, 0, 0)
+    else:
+        return colors[s]
+
+
+c = pbc["modellayer"].apply(apply_colors)
+
+fig, ax = plt.subplots(1, 1, figsize=(10, 8), dpi=50)
+ax.scatter(pbc["hobs"], hobs_model["hmod"], c=np.array(c.values),
+           marker="o", edgecolor="k",
+           facecolor="C0", s=100)
+sm = mpl.cm.ScalarMappable(cmap=cmap, norm=norm)
+cbar = plt.colorbar(sm)
+cbar.set_ticks(range(20))
+ticks = list(colors.keys())
+ticks.sort()
+cbar.set_ticklabels(np.array(ticks, dtype=int))
+cbar.set_label("Model layer number")
+ax.set_aspect("equal", adjustable="box")
+xmin, xmax = ax.get_xlim()
+ymin, ymax = ax.get_ylim()
+ax.autoscale(False)
+ax.plot([-100, 100], [-100, 100], ls="dashed", color="k", lw=2)
+ax.set_xlim(np.min([xmin, ymin]), np.max([xmax, ymax]))
+ax.set_ylim(np.min([xmin, ymin]), np.max([xmax, ymax]))
+ax.grid(b=True)
+ax.set_xlabel("Mean observed head (2015-2019) (m NAP)")
+ax.set_ylabel("Modelled head (m NAP)")
+fig.tight_layout()
+
+fig.savefig(os.path.join(figdir, "modelled_vs_observed.png"),
+            bbox_inches="tight", dpi=150)
