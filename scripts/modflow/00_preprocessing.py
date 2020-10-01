@@ -19,7 +19,7 @@ util.download_file_from_google_drive(
     '1ui1_wZJoN2oh2xwbdLHStVVO7qv0rQmj', fname)
 
 # modflow_heel_gebied.zip
-file_id = '1AHp8LVo0JwSze58s3vCiEOO8au2b_Oys'
+file_id = '19_lzfKs3b8ULXwUSaV4TOt43luefSFnC'
 fname = os.path.join(datadir, 'modflow_sfw.zip')
 util.download_file_from_google_drive(file_id, fname)
 # extract to modflow_sfw
