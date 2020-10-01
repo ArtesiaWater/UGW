@@ -198,6 +198,11 @@ ax.autoscale(False)
 ax.plot([-100, 100], [-100, 100], ls="dashed", color="k", lw=2)
 ax.set_xlim(np.min([xmin, ymin]), np.max([xmax, ymax]))
 ax.set_ylim(np.min([xmin, ymin]), np.max([xmax, ymax]))
+
+# for outlier
+ax.set_xlim(left=-7.0, right=15.0)
+ax.set_ylim(bottom=-7.0, top=15.0)
+
 ax.grid(b=True)
 ax.set_xlabel("Mean observed head (2015-2019) (m NAP)")
 ax.set_ylabel("Modelled head (m NAP)")

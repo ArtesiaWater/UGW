@@ -28,10 +28,10 @@ start = default_timer()
 
 # modelnaam en map
 model_name = 'ugw_agg_dl'
-model_ws = f'../../model/{model_name}'
+model_ws = f'../../models/{model_name}'
 
 # method for parsing surface water
-agg_method = "individual"  # 'individual', 'de_lange', 'area_weighted' or 'max_area'
+agg_method = "de_lange"  # 'individual', 'de_lange', 'area_weighted' or 'max_area'
 
 # extent en gridgrootte
 # extent = [115900, 121000, 436600, 442000]  # Schoonhoven
@@ -40,6 +40,14 @@ extent = None  # extent is determined from surface-water shape
 
 delr = 500.            # zelfde als dx
 delc = 500.            # zelfde als dy
+
+# tijdsdiscretisatie
+steady_state = True  # steady state flag, if True, parameters below are not used
+steady_start = True  # if True start transient model with steady timestep
+nstp = 1  # no. of timesteps per stress period
+perlen = 10  # length of timestep in time_units (default is days)
+start_time = '2019-01-01'  # start time (after the steady state period)
+transient_timesteps = int(365 / 10)  # no. of transient steps
 
 # geef hier paths op en of de cache gebruikt moet worden
 datadir = '../../data'
@@ -110,22 +118,10 @@ except:
 # if mask.sum() > 0:
 #     print(f"Warning! RBOT above waterlevel in {mask.sum()} cases!")
 
-# %% Time discretization
-# general
+# %% time discretization
 time_units = 'DAYS'
-nstp = 1
 tsmult = 1.0
 
-# steady-state/transient
-steady_state = True  # steady state flag
-start_time = '2019-01-01'  # start time (after the steady state period)
-
-# no. of transient time steps (only if steady_state is False)
-transient_timesteps = int(365 / 10)
-steady_start = True  # if True start transient model with steady timestep
-perlen = 10  # length of timestep in time_units (see below)
-
-# %% time discretization
 model_ds = mtime.get_model_ds_time(model_name,
                                    start_time=start_time,
                                    steady_state=steady_state,
@@ -550,6 +546,7 @@ if (mask_slope.sum() > 0) and (add_riv_slope):
             # set based on mean ZP/WP or rbot if rbot is higher.
             idxmax = group.area.idxmax()
             stage = group.loc[idxmax, ["ZP", "WP"]].mean()
+
             if np.isnan(stage):
                 continue
 
