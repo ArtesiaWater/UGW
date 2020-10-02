@@ -6,7 +6,6 @@ from timeit import default_timer
 
 import flopy as fp
 import geopandas as gpd
-import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -14,7 +13,6 @@ import rasterio
 import shapely
 import xarray as xr
 from matplotlib.patches import Patch
-from tqdm import tqdm
 from tqdm.auto import tqdm
 
 sys.path.insert(2, "../../../NHFLO/NHFLOPY")
@@ -56,9 +54,9 @@ use_cache = True
 cachedir = os.path.join(model_ws, 'cache')
 
 # files
-regis_nc = f'regis_ugw.nc'
-water_shp = os.path.join(datadir, f"modflow_sfw", "waterareas.shp")
-lines_shp = os.path.join(datadir, f"modflow_sfw", "waterlines.shp")
+regis_nc = 'regis_ugw.nc'
+water_shp = os.path.join(datadir, "modflow_sfw", "waterareas.shp")
+lines_shp = os.path.join(datadir, "modflow_sfw", "waterlines.shp")
 rivobs_fname = os.path.join(datadir, '20200717_026.zip')
 
 # verander dit niet
@@ -181,7 +179,7 @@ length_units = 'METERS'
 extent, nrow, ncol = mgrid.fit_extent_to_regis(list(extent), delr, delc)
 
 # get regis dataset
-regis_path = os.path.join(datadir, f'regis_ugw_heel_gebied.nc')
+regis_path = os.path.join(datadir, regis_nc)
 regis_ds_raw = xr.open_dataset(regis_path).sel(x=slice(extent[0], extent[1]),
                                                y=slice(extent[2], extent[3]))
 
