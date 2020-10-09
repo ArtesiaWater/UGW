@@ -11,8 +11,8 @@ from shapely.geometry import Polygon
 
 # mpl.interactive(True)
 
-model_name = 'nkrk_agg_dl'
-figtitle_prefix = "Geaggregeerd: "
+model_name = 'nkrk_ind'
+figtitle_prefix = "Individueel: "
 model_ws = f'../../models/{model_name}'
 sim_name = 'mfsim'
 figdir = os.path.join(model_ws, 'figure')
@@ -127,7 +127,6 @@ fig.tight_layout()
 fig.savefig(os.path.join(figdir, "river_leakage.png"),
             bbox_inches="tight", dpi=150)
 
-1/0
 # %% load piezometers
 xmin, xmax, ymin, ymax = gwf.modelgrid.extent
 model_extent = Polygon(

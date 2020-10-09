@@ -7,9 +7,11 @@ import pandas as pd
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 sim_name = 'mfsim'
-model_names = ['nkrk_ind', 'nkrk_agg_dl']
-model_wss = [f'../../model/{i}' for i in model_names]
-figdir = "../../model/comparisons"
+# model_names = ['schnhvn_ind', 'schnhvn_agg_dl']
+# model_names = ['nkrk_ind', 'nkrk_agg_dl']
+model_names = ['ugw_ind', 'ugw_agg_dl']
+model_wss = [f'../../models/{i}' for i in model_names]
+figdir = "../../models/comparisons"
 
 heads = []
 qlist = []

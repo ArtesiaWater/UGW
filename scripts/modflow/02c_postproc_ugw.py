@@ -69,7 +69,7 @@ qx, qy, qz = fp.utils.postprocessing.get_specific_discharge(gwf,
 # %% plot head and quiver
 fig, ax = plt.subplots(1, 1, figsize=(14, 10))
 mapview = fp.plot.PlotMapView(model=gwf)
-qm = mapview.plot_array(h[0], cmap="RdBu")#, vmin=-6, vmax=6)
+qm = mapview.plot_array(h[0], cmap="RdBu", vmin=-6, vmax=6)
 # qv = mapview.plot_vector(qx, qy, istep=1, jstep=1, normalize=False,
 #                          scale=2, alpha=0.75, width=.00175,
 #                          headwidth=3, headlength=3, headaxislength=2,
@@ -78,7 +78,7 @@ plt.yticks(rotation=90, va="center")
 
 divider = make_axes_locatable(ax)
 cax = divider.append_axes('right', size='3%', pad=0.05)
-cbar = plt.colorbar(qm, cax=cax)
+cbar = plt.colorbar(qm, cax=cax, extend="max")
 cbar.set_label("head (m NAP)")
 ax.set_title("Grondwaterstand en stroming")
 ax.set_xlabel("X (m RD)")

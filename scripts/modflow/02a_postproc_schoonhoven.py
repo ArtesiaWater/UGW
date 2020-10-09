@@ -9,7 +9,7 @@ import pandas as pd
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from shapely.geometry import Polygon
 
-model_name = 'schnhvn_ind'
+model_name = 'schnhvn_agg_dl'
 model_ws = f'../../models/{model_name}'
 sim_name = 'mfsim'
 figdir = os.path.join(model_ws, 'figure')
