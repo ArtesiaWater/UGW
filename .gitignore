@@ -131,6 +131,7 @@ dmypy.json
 data/*
 gis/
 models/
+static
 .vscode
 
 !data/.gitkeep
