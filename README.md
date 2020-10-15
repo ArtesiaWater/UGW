@@ -65,7 +65,9 @@ We gaan hieronder uit van de volgende structuur opgegeven in config.ini:
 
 De scripts\config.ini hoort er dan zo uit te zien:
    [general]
+   
    project: project
+   
    extend: extend.shp
 
 De scripts zijn genummerd in volgorde:
