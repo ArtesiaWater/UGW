@@ -1,15 +1,17 @@
 {"administrations":{
+	"RWS":1,
 	"Rijnland":13,
 	"HSK":39,
 	"HDSR":14,
 	"Rivierenland":9,
 	"V&V":8,
 	"H&A":44,
-	"Waternet":31
+	"Waternet":31,
+	"Zuiderzeeland":37
 	},
 	"boundaries": {
 		"type": "file",
-		"path": "..\\data\\sources\\Waterschapsgrenzen_4258.gml",
-		"id_field": "wbh_code_objectidentificatie"
+		"path": "..\\data\\sources\\admins.shp",
+		"id_field": "id"
 	}
 }

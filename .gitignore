@@ -136,3 +136,5 @@ static
 
 !data/.gitkeep
 !data/input/.gitkeep
+scripts/read_bathymetry.py
+scripts/read_bathymetry.py

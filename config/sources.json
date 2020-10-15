@@ -33,73 +33,141 @@
 		},
 		"v&v_legger": {
 			"url": "https://services1.arcgis.com/ug8NBKcLHVNmdmdt/ArcGIS/rest/services/Legger_Watersysteem/FeatureServer",
-			"type": "arcrest"
+			"type": "arcrest",
+			"format": "json"
 		},
 		"waternet_legger": {
 			"url": "https://maps.waternet.nl/arcgis/rest/services/AGV_Legger/AGV_Legger_GEONIS/MapServer",
-			"type": "arcrest"
+			"type": "arcrest",
+			"format": "json"
 		},
 		"rivierenland_legger": {
 			"url": "https://kaarten.wsrl.nl/arcgis/rest/services/Kaarten/Legger_Watersysteem/MapServer",
 			"type": "arcrest"
 		},
+		"rivierenland_peilvakken": {
+			"url": "https://kaarten.wsrl.nl/arcgis/rest/services/Kaarten/Vigerend_Peilgebieden/MapServer",
+			"type": "arcrest"
+		},
 		"h&a_legger": {
 			"url": "https://opendata.hunzeenaas.nl/geoserver/ows",
 			"type": "arcrest"
+		},
+		"V&V_GIS": {
+			"url": "..\\data\\sources\\V&V\\GISbestanden WVV.gdb",
+			"type": "gdb"
+		},
+		"rws_krw": {
+			"url": "https://geoservices.rijkswaterstaat.nl/apps/geoserver/kaderrichtlijn_water/ows",
+			"type": "wfs"
+		},
+		"rws_legger": {
+			"url": "https://geoservices.rijkswaterstaat.nl/arcgis2/rest/services/GDR/rws_legger_2_0/mapserver",
+			"type": "arcrest",
+			"format": "json"
 		}
 	},
 	"files": {
 		"hsk_peilvakken": {
 			"path": "..\\data\\sources\\HSK\\PeilgebiedenlaagHHSK_20200409.shp"
+		},
+		"rivierenland_waterlijnen": {
+			"path": "..\\data\\sources\\Rivierenland\\waterlijnen_20200724.shp"
+		},
+		"waternet_peilvakken": {
+			"path": "..\\data\\sources\\Waternet\\VigerendePeilgebieden_edit_20200523.shp"
+		},
+		"zuiderzeeland_waterlijnen": {
+			"path": "..\\data\\sources\\Zuiderzeeland\\Profiel_merged_20200724.shp"
+		},
+		"zuiderzeeland_peilvakken": {
+			"path": "..\\data\\sources\\Zuiderzeeland\\Peilgebieden Besluit.shp"
 		}
 	},
 	"water_areas": {
-		"Rijnland": {
-			"source": "rijnland_legger",
-			"layer": 2,
+		"HDSR": {
+			"source": "bgt",
+			"layer": [
+				"waterdeel",
+				"waterdeel"
+			],
+			"bronhouder": "W0636",
 			"attributes": {
-				"src_id": "CODE",
-				"BB": "BODEMBREEDTE",
-				"WD": "WATERDIEPTE",
-				"THL": "TALUDHELLINGLINKS",
-				"THR": "TALUDHELLINGRECHTS",
-				"CAT": "CATEGORIEOPPWATERLICHAAM"
-			},
-			"translations": {
-				"CAT": {
-					"primair": 1,
-					"overig": 3
-				}
+				"src_id": "gml_id"
 			}
 		},
 		"HSK": {
 			"source": "bgt",
 			"layer": "waterdeel",
-			"bronhouders": [
-				"W0656"
-			],
+			"bronhouder": "W0656",
 			"attributes": {
 				"src_id": "gml_id"
 			}
 		},
-		"HDSR": {
+		"Rijnland": {
+			"source": "rijnland_legger",
+			"layer": 2,
+			"attributes": {
+				"src_id": "CODE",
+				"name": "NAAM",
+				"BB": "BODEMBREEDTE",
+				"WD": "WATERDIEPTE",
+				"THL": "TALUDHELLINGLINKS",
+				"THR": "TALUDHELLINGRECHTS",
+				"CAT": "CATEGORIEOPPWATERLICHAAM"
+			}
+		},
+		"Rivierenland": {
 			"source": "bgt",
 			"layer": "waterdeel",
-			"bronhouders": [
-				"L0002",
-				"W0636"
-			],
+			"bronhouder": "W0621",
+			"attributes": {
+				"src_id": "gml_id"
+			}
+		},
+		"RWS": {
+			"source": "bgt",
+			"layer": "waterdeel",
+			"bronhouder": "L0002",
+			"attributes": {
+				"src_id": "gml_id"
+			}
+		},
+		"V&V": {
+			"source": "bgt",
+			"layer": "waterdeel",
+			"bronhouder": "W0662",
+			"attributes": {
+				"src_id": "gml_id"
+			}
+		},
+		"Waternet": {
+			"source": "bgt",
+			"layer": "waterdeel",
+			"bronhouder": "W0155",
+			"attributes": {
+				"src_id": "gml_id"
+			}
+		},
+		"Zuiderzeeland": {
+			"source": "bgt",
+			"layer": "waterdeel",
+			"bronhouder": "W0650",
 			"attributes": {
 				"src_id": "gml_id"
 			}
 		}
 	},
 	"water_lines": {
-		"Rijnland": {
-			"source": "rijnland_legger",
-			"layer": 1,
+		"HDSR": {
+			"source": "hdsr_hydro-object",
+			"layer": 0,
 			"attributes": {
-				"src_id": "CODE"
+				"src_id": "CODE",
+				"name": "NAAM",
+				"BB": "IWS_W_BODBR",
+				"BL": "IWS_W_BODHO",
+				"CAT": "CATEGORIEOPPWATERLICHAAM"
 			}
 		},
 		"HSK": {
@@ -107,6 +175,7 @@
 			"layer": 11,
 			"attributes": {
 				"src_id": "CODE",
+				"name": "NAAM",
 				"WB": "WATERBREEDTE",
 				"WD": "DIEPTE",
 				"THL": "TALUDLINKS",
@@ -116,18 +185,77 @@
 				"CAT": 1
 			}
 		},
-		"HDSR": {
-			"source": "hdsr_hydro-object",
-			"layer": 0,
+		"Rivierenland": {
+			"source": "rivierenland_waterlijnen",
+			"attributes": {
+				"src_id": "ID",
+				"CAT": "categorie",
+				"BLU": "BEDLEVELUP",
+				"BLD": "BEDLEVELDN"
+			}
+		},
+		"V&V": {
+			"source": "v&v_legger",
+			"layers": [
+				14,
+				15,
+				16
+			],
+			"attributes": {
+				"src_id": "OVKIDENT",
+				"name": "OSMOMSCH",
+				"BB": "AVVBODDR",
+				"BL": "AVVBODH",
+				"BLU": "AVVHOBOS",
+				"BLD": "AVVHOBES",
+				"CAT": "layer_name"
+			}
+		},
+		"Waternet": {
+			"source": "waternet_legger",
+			"layer": 19,
 			"attributes": {
 				"src_id": "CODE",
-				"BB": "IWS_W_BODBR",
-				"BL": "IWS_W_BODHO",
-				"CAT": "CATEGORIEOPPWATERLICHAAM"
+				"BB": "BODEMBREEDTE",
+				"BL": "BODEMHOOGTE",
+				"CAT": "CATEGORIE",
+				"VP": "WATERPEIL"
+			}
+		},
+		"Zuiderzeeland": {
+			"source": "zuiderzeeland_waterlijnen",
+			"attributes": {
+				"src_id": "OWA_OWA_ID",
+				"name": "name",
+				"BL": "BL",
+				"WD": "WD",
+				"BB": "BB",
+				"CAT": "CAT"
 			}
 		}
 	},
 	"water-level_areas": {
+		"HDSR": {
+			"source": "hdsr_peilvakken",
+			"layer": 0,
+			"attributes": {
+				"src_id": "CODE",
+				"ZP": "ZOMERPEIL",
+				"WP": "WINTERPEIL",
+				"VP": "VASTPEIL",
+				"FPO": "ONDERPEIL",
+				"FPB": "BOVENPEIL"
+			}
+		},
+		"HSK": {
+			"source": "hsk_peilvakken",
+			"attributes": {
+				"src_id": "GPGIDENT",
+				"VP": "IWS_GPGVAS",
+				"FPB": "IWS_GPGBOV",
+				"FPO": "IWS_GPGOND"
+			}
+		},
 		"Rijnland": {
 			"source": "rijnland_peilvakken",
 			"layer": 0,
@@ -142,71 +270,63 @@
 				"VP": "VASTPEIL"
 			}
 		},
-		"HSK": {
-			"source": "hsk_peilvakken",
+		"Rivierenland": {
+			"source": "rivierenland_peilvakken",
+			"layer": 0,
+			"object_id": "se_sdo_rowid",
 			"attributes": {
-				"src_id": "GPGIDENT",
-				"VP": "IWS_GPGVAS",
-				"FPB": "IWS_GPGBOV",
-				"FPO": "IWS_GPGOND"
+				"src_id": "code",
+				"ZP": "zomerpeil",
+				"WP": "winterpeil",
+				"VP": [
+					"VASTPEIL",
+					"streefpeil"
+				],
+				"FPO": "min_peil",
+				"FPB": "max_peil",
+				"ZFPO": "ondermarge_zomer",
+				"ZFPB": "bovenmarge_zomer",
+				"WFPO": "ondermarge_winter",
+				"WFPB": "bovenmarge_winter"
 			}
 		},
-		"HDSR": {
-			"source": "hdsr_peilvakken",
-			"layer": 0,
+		"RWS": {
+			"source": "rws_krw",
+			"layer": "kaderrichtlijn_water:oppervlaktewater_lichamen_v",
+			"attributes": {
+				"src_id": "OWMIDENT",
+				"name": "OWMNAAM"
+			}
+		},
+		"V&V": {
+			"source": "V&V_GIS",
+			"layer": "Peilvakken",
+			"attributes": {
+				"src_id": "CODE",
+				"ZP": "WS_STREEFPEILZOMER",
+				"WP": "WS_STREEFPEILWINTER"
+			}
+		},
+		"Waternet": {
+			"source": "waternet_peilvakken",
 			"attributes": {
 				"src_id": "CODE",
 				"ZP": "ZOMERPEIL",
 				"WP": "WINTERPEIL",
-				"VP": "VASTPEIL",
-				"FPO": "ONDERPEIL",
-				"FPB": "BOVENPEIL"
+				"VP": "VAST_PEIL",
+				"FPO": "FLEXIBEL_W",
+				"FPB": "FLEXIBEL_1"
 			}
-		}
-	},
-	"elevation": {
-		"ahn_dtm": {
-			"type": "raster-file",
-			"path": "..\\data\\sources\\ahn3_05m_dtm.tif"
 		},
-		"bathymetrie": {
-			"type": "raster-file",
-			"path": "..\\data\\sources\\MN_zuid_NAP.tif"
-		}
-	},
-	"overig": {
-		"rijnland_primaire_waterlopen": {
-			"service": "rijnland_legger",
-			"layer": 1,
-			"filter": "CATEGORIEOPPWATERLICHAAM = 'primair'"
-		},
-		"rijnland_overige_waterlopen": {
-			"service": "rijnland_legger",
-			"layer": 1,
-			"filter": "CATEGORIEOPPWATERLICHAAM = 'overig'"
-		},
-		"rijnland_watervlakken": {
-			"service": "rijnland_legger",
-			"layer": 2,
-			"filter": "BODEMBREEDTE > 25"
-		},
-		"hsk_primaire_waterlopen": {
-			"service": "hsk_legger",
-			"layer": 11
-		},
-		"hsk_overige_waterlopen": {
-			"service": "hsk_legger",
-			"layer": 12
-		},
-		"hdsr_primaire_waterlopen": {
-			"service": "hdsr_hydro-object",
-			"layer": 0,
-			"filter": "CATEGORIEOPPWATERLICHAAM = 1"
-		},
-		"hdsr_overige_waterlopen": {
-			"service": "hdsr_hydro-object",
-			"layer": 0,
-			"filter": "CATEGORIEOPPWATERLICHAAM > 1"
+		"Zuiderzeeland": {
+			"source": "zuiderzeeland_peilvakken",
+			"attributes": {
+				"src_id": "GPGIDENT",
+				"ZP": "GPGZMRPL",
+				"WP": "GPGWNTPL",
+				"FPB": "IWS_BOVENG",
+				"FPO": "IWS_ONDERG"
+			}
 		}
 	}
 }
