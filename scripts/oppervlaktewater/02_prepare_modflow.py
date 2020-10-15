@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 #public packages
+import configparser
 import geopandas as gpd
 import json
 import logging
@@ -8,6 +9,7 @@ import numpy as np
 import os
 from pathlib import Path
 import pandas as pd
+import shutil
 import pyproj
 from rasterstats import zonal_stats
 import rasterio
@@ -16,29 +18,34 @@ import time
 from tqdm import tqdm
 
 
-'''
-ToDo:
-    - evalueren of een significant deel van het watervlak intersect met peilgebied bij sjoin
-    - als BLD & BLU bestaan is het OK dat er geen BL beschikbaar is op het vlak, ook niet bepalen
-'''
-
 warnings.filterwarnings('ignore', 'GeoSeries.notna', UserWarning)
 tqdm.pandas()
 
 start = time.time()
-project = 'model_extend'
+
+
+#%% alle paden van output bestanden
+config_ini = configparser.ConfigParser()
+config_ini.read(r'config.ini')
+project = config_ini['general']['project']
+
+extend_shp = 'extend.shp'
+if 'extend' in config_ini['general'].keys():
+    extend_shp = config_ini['general']['extend']
 
 #%% paths
-admins = {'file_name':r'..\config\administrations.json'}
-sources = {'file_name':r'..\config\sources.json'}
-validation = {'file_name':r'..\config\validation.json'}
+os.chdir('..\..\config')
+admins = {'file_name':Path(r'..\config\administrations.json')}
+sources = {'file_name':Path(r'..\config\sources.json')}
+validation = {'file_name':Path(r'..\config\validation.json')}
 
 admins.update(json.loads(open(admins['file_name'],'r').read()))
 sources.update(json.loads(open(sources['file_name'],'r').read()))
 validation.update(json.loads(open(validation['file_name'],'r').read()))
 
-input_dir = Path(f'..\data\{project}\input')
-project_shp = input_dir.joinpath('extend.shp')
+data_dir = Path(f'..\data\{project}')
+input_dir = data_dir.joinpath('input')
+project_shp = data_dir.joinpath(extend_shp)
 
 admins_shp = input_dir.joinpath('waterschappen.shp')
 wl_areas_shp = input_dir.joinpath('water-level_areas.shp')
@@ -55,8 +62,11 @@ wla_verdict_shp = modflow_dir.joinpath('water-level_areas_verdict.shp')
 wla_verdict_json = modflow_dir.joinpath('water-level_areas_verdict.geojson')
 w_lines_bl_shp = modflow_dir.joinpath('waterlines.shp')
 
-if not modflow_dir.exists:
-    modflow_dir.mkdir(parents=True)
+
+if modflow_dir.exists():
+    shutil.rmtree(modflow_dir)
+modflow_dir.mkdir(parents=True)
+
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
 
@@ -405,7 +415,7 @@ w_lines_df = pd.DataFrame(w_lines_df.drop(['admin','admin_id','src_id','src'],ax
 
 #%%
 mod_areas_gdf = mod_areas_gdf.merge(w_lines_df, 
-                                    on='LOC_ID',
+                                    left_on='idx_wl',
                                     right_index=True,
                                     how='left',
                                     suffixes=('_wa','_wl'))

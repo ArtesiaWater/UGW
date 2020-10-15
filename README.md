@@ -27,7 +27,7 @@ toegelicht:
     de verschillende scripts.
 -   `models`: leeg, map voor het opslaan van modelinvoer
 -   `scripts`: map met alle Python-scripts
-    -   `??`: map met scripts voor het ophalen en samenvoegen van oppervlaktewater gegevens
+    -   `oppervlaktewater`: map met scripts voor het ophalen en samenvoegen van oppervlaktewater gegevens
     -   `modflow`: map met scripts voor het omzetten van oppervlaktewater naar MODFLOW invoer
 -   `tools`: Windows en Linux binaries voor MODFLOW
 -   `environment.yml`: bestand met benodigde Python packages voor de scripts in deze repository.
@@ -47,7 +47,30 @@ gebruiker.
 
 ### Ophalen oppervlaktewater gegevens
 
-TODO: Daniel
+Het ophalen, samenvoegen en valideren van haalt de basisdata zoveel mogelijk uit online gegevensbronnen. Er zijn drie json-bestanden
+aangemaakt die de gebruiker in principe niet hoeft aan te passen:
+- `config\administrations.json`: hier staan de organisaties (Rijkswaterstaat en waterschappen) waarvan data gedownloaded wordt, inclusief 
+   een identificatie en een verwijzing naar een shape-file met een polygon per organisatie.
+- `config\sources.json`: hier staan per laag (watervlakken, waterlijnen en peilvakken) een verwijzing naar de web-service of het bestand waar de basisbestanden
+  data kan worden gedownloaded
+- `validation.json`: hier staat per parameter een transformatie en defaultwaarde.
+
+Data ophalen voor een (deel)gebied kan door een sub-map te definieren in de data-map. In deze map
+moet een shape-file staan met een of meerdere polygonen die samen het projectgebied definieren. De naam van deze map 
+en de shape-file moeten worden opgegeven in het bestand config.ini in de map scripts\oppervlaktewater.
+
+We gaan hieronder uit van de volgende structuur opgegeven in config.ini:
+-  `data\project`: de map waarin de data wordt opgeslagen
+-  `data\project\extend.shp`: polygon-shape met de grens van het project
+
+De scripts\config.ini hoort er dan zo uit te zien:
+   [general]
+   project: project
+   extend: extend.shp
+
+De scripts zijn genummerd in volgorde:
+- `01_merge_sources.py`: download alle basisbestanden en voegt deze samen. Met bovenstaande config.ini in de map data\project\input
+- `02_prepare_modflow.py`: converteert en valideert de basisbestanden. Met bovenstaande config.ini in de map data\project\modflow
 
 ### Omzetting naar MODFLOW-invoer
 

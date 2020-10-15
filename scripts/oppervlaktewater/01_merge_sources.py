@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 #public packages
+import configparser
 import geopandas as gpd
 import json
 import logging
@@ -12,28 +13,28 @@ import pyproj
 from shapely.geometry import Polygon
 import sys
 import time
+import shutil
 
 #project scripts
 import services
 import get_bgt
 import get_ahn
 
-'''
-ToDo:
-    - import gdb ondersteunen
-    - alle bronnen aansluiten en testen:
-        - Zuiderzeeland
-        - Vallei en veluwe
-    - In hellend gebied verhang mee geven
-'''
-
 start = time.time()
-project = 'model_extend' # data-map met input shape-files
 bgt_service = 'website'
 
 #%% alle paden van output bestanden
+config_ini = configparser.ConfigParser()
+config_ini.read(r'config.ini')
+project = config_ini['general']['project']
 
-project_shp = Path(f'..\data\{project}\input\extend.shp')
+#%%
+extend_shp = 'extend.shp'
+if 'extend' in config_ini['general'].keys():
+    extend_shp = config_ini['general']['extend']
+
+os.chdir('..\..\config')
+project_shp = Path(f'..\data\{project}\{extend_shp}')
 input_dir = Path(f'..\data\{project}\input')
 
 admins = {'file_name':Path(r'..\config\administrations.json')}
@@ -43,8 +44,9 @@ sources.update(json.loads(open(sources['file_name'],'r').read()))
 
 admins_shp = input_dir.joinpath('waterschappen.shp')
 
-if not input_dir.exists:
-    input_dir.mkdir(parents=True)
+if input_dir.exists():
+    shutil.rmtree(input_dir)
+input_dir.mkdir(parents=True)
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
 

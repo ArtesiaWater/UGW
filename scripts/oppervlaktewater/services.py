@@ -6,7 +6,6 @@ import requests
 import logging
 import gdal
 import fiona
-import json
 import sys
 import xml.etree.ElementTree as ET
 from io import StringIO
