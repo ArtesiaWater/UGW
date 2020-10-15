@@ -64,11 +64,9 @@ We gaan hieronder uit van de volgende structuur opgegeven in config.ini:
 -  `data\project\extend.shp`: polygon-shape met de grens van het project
 
 De scripts\config.ini hoort er dan zo uit te zien:
-   [general]
-   
-   project: project
-   
-   extend: extend.shp
+   [general]|
+   project: project|
+   extend: extend.shp|
 
 De scripts zijn genummerd in volgorde:
 - `01_merge_sources.py`: download alle basisbestanden en voegt deze samen. Met bovenstaande config.ini in de map data\project\input
