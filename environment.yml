@@ -4,6 +4,7 @@ channels:
   - defaults
 dependencies:
   - python=3.7
+  - configparser
   - ipython
   - pip
   - scipy
@@ -15,6 +16,7 @@ dependencies:
   - fiona
   - gdal
   - rasterio
+  - rasterstats
   - geopandas
   - tqdm
   - openpyxl
