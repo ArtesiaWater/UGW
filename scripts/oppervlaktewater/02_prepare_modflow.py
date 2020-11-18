@@ -29,9 +29,9 @@ config_ini = configparser.ConfigParser()
 config_ini.read(r'config.ini')
 project = config_ini['general']['project']
 
-extend_shp = 'extend.shp'
-if 'extend' in config_ini['general'].keys():
-    extend_shp = config_ini['general']['extend']
+extent_shp = 'extent.shp'
+if 'extent' in config_ini['general'].keys():
+    extent_shp = config_ini['general']['extent']
 
 #%% paths
 os.chdir('..\..\config')
@@ -45,7 +45,7 @@ validation.update(json.loads(open(validation['file_name'],'r').read()))
 
 data_dir = Path(f'..\data\{project}')
 input_dir = data_dir.joinpath('input')
-project_shp = data_dir.joinpath(extend_shp)
+project_shp = data_dir.joinpath(extent_shp)
 
 admins_shp = input_dir.joinpath('waterschappen.shp')
 wl_areas_shp = input_dir.joinpath('water-level_areas.shp')

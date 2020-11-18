@@ -29,12 +29,12 @@ config_ini.read(r'config.ini')
 project = config_ini['general']['project']
 
 #%%
-extend_shp = 'extend.shp'
-if 'extend' in config_ini['general'].keys():
-    extend_shp = config_ini['general']['extend']
+extent_shp = 'extent.shp'
+if 'extent' in config_ini['general'].keys():
+    extent_shp = config_ini['general']['extent']
 
 os.chdir('..\..\config')
-project_shp = Path(f'..\data\{project}\{extend_shp}')
+project_shp = Path(f'..\data\{project}\{extent_shp}')
 input_dir = Path(f'..\data\{project}\input')
 
 admins = {'file_name':Path(r'..\config\administrations.json')}
