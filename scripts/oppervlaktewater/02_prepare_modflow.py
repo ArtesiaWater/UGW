@@ -43,9 +43,9 @@ admins.update(json.loads(open(admins['file_name'],'r').read()))
 sources.update(json.loads(open(sources['file_name'],'r').read()))
 validation.update(json.loads(open(validation['file_name'],'r').read()))
 
-data_dir = Path(f'..\data\{project}')
+data_dir = Path(f'..\data\{project}').absolute().resolve()
 input_dir = data_dir.joinpath('input')
-project_shp = data_dir.joinpath(extent_shp)
+project_shp = input_dir.joinpath(extent_shp)
 
 admins_shp = input_dir.joinpath('waterschappen.shp')
 wl_areas_shp = input_dir.joinpath('water-level_areas.shp')
@@ -54,7 +54,7 @@ w_lines_shp = input_dir.joinpath('water_lines.shp')
 dem_tif = input_dir.joinpath('ahn3_5m_dtm.tif')
 bathymetry_shp = r'..\data\sources\Bathymetry\bathymetry_masks.shp'
 
-modflow_dir = Path(f'..\data\{project}\modflow')
+modflow_dir = Path(f'..\data\{project}\modflow').absolute().resolve()
 mod_areas_shp = modflow_dir.joinpath('waterareas.shp')
 ma_verdict_shp = modflow_dir.joinpath('waterareas_verdict.shp')
 ma_verdict_json = modflow_dir.joinpath('waterareas_verdict.geojson')
@@ -279,7 +279,7 @@ def combine_wl(gdf):
             mark = 10
             
             #compare all levels with Z
-            level_cols = [col for col in gdf.columns if col.isupper() and not col in ['Z50','SUB_wla']]
+            level_cols = [col for col in gdf.columns if col.isupper() and not col in ['Z50', 'Z90', 'SUB_wla']]
             for col in level_cols:
                 if row[col] == row[col]:
                     if not row[col] <= row['Z50']:
