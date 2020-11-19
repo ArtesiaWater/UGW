@@ -1,6 +1,9 @@
-# UGW: "Bouwsteen Oppervlaktewater"
+# UGW: Bouwsteen Oppervlaktewater
 
-Python scripts voor oppervlaktewater-component Utrechts GrondWater model (UGW)
+Python scripts voor oppervlaktewater-component Utrechts GrondWater model (UGW).
+
+Voor een uitgebreide uitleg van de Bouwsteen Oppervlaktewater wordt verwezen 
+naar het [rapport](./report/rap_bouwsteen_oppervlaktewater_UGW_incl_bijlage.pdf).
 
 ## Installatie
 
