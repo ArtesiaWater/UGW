@@ -15,8 +15,8 @@ import xarray as xr
 from matplotlib.patches import Patch
 from tqdm.auto import tqdm
 
-sys.path.insert(2, "../../../NHFLO/NHFLOPY")
-from modules import ahn, layer_models, mgrid, mtime, rws, surface_water, util
+sys.path.insert(2, "..")
+from nhflopy import ahn, layer_models, mgrid, mtime, rws, surface_water, util
 
 # mpl.interactive(True)
 
@@ -272,16 +272,15 @@ bathshp = bathshp[mask]
 bath = xr.full_like(model_ds['top'], np.NaN)
 for file in bathshp['FILE'].dropna():
     fname = os.path.join(datadir, file.replace('../data/sources/', ''))
-    # get the minimum bathemetry-level in each cell
+    # get the minimum bathymetry-level in each cell
     resampling = rasterio.enums.Resampling.min
     zt = mgrid.raster_to_quadtree_grid(fname, model_ds, resampling=resampling)
     # update bath when zt is lower
     bath = bath.where(np.isnan(zt) | (bath < zt), zt)
-# apparently bathemetry is in mm (need to check if this is always the case)
+# apparently bathymetry is in mm
 model_ds['bathymetry'] = bath = bath / 1000.
 
-# TODO: ensure ahn option always works
-# fill bathemetry by ahn, so there is allways data
+# fill bathymetry by ahn, so there is always data
 model_ds['bathymetry'] = model_ds['bathymetry'].fillna(model_ds['ahn_min'])
 # and otherwise fill by the top of the model
 model_ds['bathymetry'] = model_ds['bathymetry'].fillna(model_ds['top'])
