@@ -101,6 +101,13 @@ ze in een bepaalde volgorde uitgevoerd moeten worden.
 -   `02*_postproc_*.py`: post-processing scrips, visualisatie van resultaten
 -   `02_comparison.py`: vergelijking van modeluitkomsten tussen twee modellen.
 
+## Lokale data
+Niet alle data is online toegankelijk. Een deel moet lokaal gemaakt worden. 
+Deze data kan via Google Drive gedownload worden. 
+Zie daarvoor deze link: [Lokale data Google Drive](https://drive.google.com/drive/u/0/folders/1fQ1pFgWc5xxuU5TBbR4kb75z1FNciWTj)
+
+Als je iets mist, kijk dan eerst of wat je zoekt via de link hierboven beschikbaar is.
+
 ## Auteurs
 
 -   Daniel Tollenaar (D2Hydro)
