@@ -57,13 +57,16 @@ aangemaakt die de gebruiker in principe niet hoeft aan te passen:
 - `config/sources.json`: hier staan per laag (watervlakken, waterlijnen en peilvakken) een verwijzing naar de web-service of het bestand waar de basisbestanden kan worden gedownload.
 - `validation.json`: hier staat per parameter een transformatie en defaultwaarde.
 
+Helaas zijn niet alle data online beschikbaar en moet een deel lokaal beschikbaar gemaakt worden. Het bestand met deze data heet `sources_admin_waterschappen.zip` 
+en kan [hier gedownload](https://drive.google.com/drive/u/0/folders/1fQ1pFgWc5xxuU5TBbR4kb75z1FNciWTj) worden. Het bestand dient uitgepakt te worden in de `data/sources` map.
+
 Data ophalen voor een (deel)gebied kan door een sub-map te definieren in de data-map. In deze map
 moet een shape-file staan met een of meerdere polygonen die samen het projectgebied definieren. De naam van deze map 
 en de shape-file moeten worden opgegeven in het bestand config.ini in de map `scripts/oppervlaktewater`.
 
 We gaan hieronder uit van de volgende structuur opgegeven in config.ini:
 -  `data/project`: de map waarin de data wordt opgeslagen
--  `data/project/extend.shp`: polygon-shape met de grens van het project
+-  `data/project/extent.shp`: polygon-shape met de grens van het project
 
 De `scripts/config.ini` hoort er dan zo uit te zien:
 
