@@ -414,9 +414,9 @@ if not sfw_slope.empty:
 
 # update dataset
 maskdrn = sfw_slope.SUB == 0
-sfw_slope[maskdrn,"bc"] = "riv_drn"
+sfw_slope.loc[maskdrn,"bc"] = "riv_drn"
 maskinf = sfw_slope.SUB == 1
-sfw_slope[maskinf,"bc"] = "riv_inf"
+sfw_slope.loc[maskinf,"bc"] = "riv_inf"
 sfw_grid.update(sfw_slope)
 print("Features added to RIV_inf dataset.")
 
