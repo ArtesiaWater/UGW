@@ -12,7 +12,6 @@ import warnings
 import fiona
 import flopy
 import geopandas as gpd
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import rasterio
@@ -20,13 +19,11 @@ import rasterio.features
 import requests
 import xarray as xr
 from osgeo import gdal
-from owslib.wfs import WebFeatureService
 from shapely.geometry import LineString, Point, Polygon, mapping, shape
 from shapely.strtree import STRtree
 from tqdm import tqdm
 
-from . import ahn, mgrid, panden, rws, util
-from .arcrest import ArcREST
+from . import mgrid, rws, util
 
 
 def get_general_head_boundary(model_ds, gdf,
@@ -157,109 +154,6 @@ def get_modelgrid_sea(gdf_sea, mfgrid, model_ds,
     return model_ds
 
 
-def get_hhnk_legger(extent, year='2019', layer=92, index='CODE'):
-    url = (r'https://kaarten.hhnk.nl/arcgis/rest/services/od_legger/'
-           'od_legger_wateren_{}_oppervlaktewateren_vg/MapServer')
-    ar = ArcREST(url.format(year))
-    gdf = ar.get_features(layer, extent)
-    if index in gdf.columns:
-        gdf = gdf.set_index(index)
-    return gdf
-
-
-def plot_hhnk_legger(gdf_hhnk, figdir, extent=None):
-    # plot some columns to sea what values are filled in
-    columns = ['STREEFPEIL_WINTER', 'STREEFPEIL_ZOMER', 'WS_BODEMHOOGTE',
-               'WATERDIEPTE_STREEFPEIL_ZOMER', 'WATERDIEPTE_STREEFPEIL_WINTER',
-               'DIEPTE_TOV_MAAIVELD']
-    for column in columns:
-        f, ax = plt.subplots()
-        yticklabels = ax.yaxis.get_ticklabels()
-        plt.setp(yticklabels, rotation=90, verticalalignment='center')
-        ax.axis('scaled')
-        if extent is not None:
-            ax.axis(extent)
-        gdf_hhnk[~gdf_hhnk[column].isna()].plot(column, ax=ax, legend=True)
-        ax.set_title(column)
-        f.tight_layout(pad=0.0)
-        f.savefig(os.path.join(figdir, column))
-
-
-def get_hhnk_wfs():
-    url = 'https://geoserver-hhnk.webgispublisher.nl/ows'
-    return WebFeatureService(url, version='1.1.0')
-
-
-def get_hhnk_wfs_features(typename, extent=None, index=None):
-    wfs = get_hhnk_wfs()
-    kwargs = {'typename': typename, 'outputFormat': 'json'}
-    if extent is not None:
-        kwargs['bbox'] = [extent[0], extent[2], extent[1], extent[3]]
-    response = wfs.getfeature(**kwargs).read()
-    gdf = gpd.GeoDataFrame.from_features(json.loads(response)['features'])
-    if index in gdf.columns:
-        gdf = gdf.set_index(index)
-    if 'bbox' in gdf.columns:
-        gdf = gdf.drop('bbox', axis=1)
-    return gdf
-
-
-def get_hhnk_oppervlaktewateren(extent, index='OVKIDENT'):
-    typename = 'PowerBrowser:PBr_Oppervlaktewateren'
-    gdf = get_hhnk_wfs_features(typename, extent=extent, index=index)
-    return gdf
-
-
-def get_hhnk_peilgebieden(extent, index='GPGIDENT'):
-    typename = 'PowerBrowser:PBrPeilgebieden'
-    gdf = get_hhnk_wfs_features(typename, extent=extent, index=index)
-    return gdf
-
-
-def get_hhnk_data_cut_by_model(extent, gwf, model_ds, use_cache=False,
-                               cachedir=None):
-
-    if model_ds.gridtype == 'structured':
-        raise ValueError('function can not (yet) handle structured grids')
-
-    gdf = util.get_cache_gdf(use_cache, cachedir, 'hhnk.geojson',
-                             cut_hhnk_data_by_model, model_ds=model_ds,
-                             check_time=False, extent=extent, gwf=gwf)
-    return gdf
-
-
-def add_linestring_info_to_polygon_gdf(bgt, hhnk):
-    add_columns = hhnk.columns[~hhnk.columns.isin(bgt.columns)]
-    geometries = hhnk['geometry']
-    for ind in geometries.index:
-        geometries[ind].ind = ind
-    s = STRtree(geometries)
-    rows = []
-    for index, row in tqdm(bgt.iterrows(), total=bgt.shape[0],
-                           desc='add linestring info to polygon'):
-        rs = s.query(row.geometry)
-        rown = row.copy()
-        if len(rs) == 1:
-            r = rs[0]
-            # only one line in the polygon
-            props = hhnk.loc[r.ind, add_columns]
-            rown = rown.append(props)
-        elif len(rs) > 1:
-            lines = hhnk.loc[[r.ind for r in rs]].copy()
-            lines.geometry = lines.intersection(row.geometry)
-            lines.geometry
-            if np.all(lines.length == 0):
-                # if there is no intersection at all, take the average
-                props = lines[add_columns].mean()
-            else:
-                # take the longest intersection
-                props = lines.loc[lines.length.idxmax(), add_columns]
-            rown = rown.append(props)
-        rows.append(rown)
-    gdf = gpd.GeoDataFrame(rows)
-    return gdf
-
-
 def cut_gdf_by_polygon_gdf(gdf_ow, gdf_pg, geom_type='LineString'):
     add_columns = gdf_pg.columns[~gdf_pg.columns.isin(gdf_ow.columns)]
     # set the index as as attribute to the(multi)-polygons
@@ -357,152 +251,6 @@ def calculate_min_ahn_in_polygons(bgt, fname, verbose=True):
         else:
             ahn_min.append(np.NaN)
     return ahn_min
-
-
-def cut_hhnk_data_by_model(extent, gwf):
-    """Generate a GeoDataFrame of the surface-water, that is cut by the
-    modelgrid"""
-    datadir = r'..\data'
-
-    bgt = get_bgt(extent)
-
-    # cut by panden-shape
-    panden_shp = panden.get_panden_shp(datadir)
-    bgt = remove_intersecting_features(bgt, panden_shp)
-
-    # cut by large surface water shape
-    fname_opp_water = os.path.join(datadir, r'opp_water_nhflo.shp')
-    gdf_opp_water = gpd.read_file(fname_opp_water)
-    bgt = remove_intersecting_features(bgt, gdf_opp_water)
-
-    # add minimum surface level within bgt-polygons
-    fname_ahn = os.path.join(datadir, 'ahn3_5m_dtm.tiff')
-    bgt['ahn_min'] = calculate_min_ahn_in_polygons(bgt, fname_ahn)
-
-    bbox = [extent[0], extent[2], extent[1], extent[3]]
-    legger = gpd.read_file(os.path.join(datadir, 'DAMO.gdb'),
-                           layer='LEGGER_WATERLOPEN_2019VASTGEST', bbox=bbox)
-    # add information from oppervlaktewateren to BGT
-    bgt = add_linestring_info_to_polygon_gdf(bgt, legger)
-
-    # we do not add oppervlaktewateren that do not cross any polygon of the BGT
-    # as then there is a large risk that we add watercourses twice
-    # when the two datasets have a slight offset (which happens in the dunes)
-
-    # generate a polygon-shape of the peilgebieden
-    peilgebieden = gpd.read_file(os.path.join(datadir, 'DAMO.gdb'),
-                                 layer='peilgebieden_praktijk', bbox=bbox)
-
-    peilafwijking = gpd.read_file(os.path.join(datadir, 'DAMO.gdb'),
-                                  layer='peilafwijking', bbox=bbox)
-
-    # remove overlapping parts of peilafwijking from peilgebieden
-    peilgebieden = gpd.overlay(peilgebieden, peilafwijking, how='difference')
-    # then add peilafwijking to peilgebieden
-    peilafwijking = peilafwijking[[
-        'CODE', 'ONDERGRENSPEIL', 'BOVENGRENSPEIL', 'geometry']]
-    peilgebieden['peilafwijking'] = False
-    peilafwijking['peilafwijking'] = True
-    peilgebieden = peilgebieden.append(peilafwijking).reset_index(drop=True)
-
-    # remove invalid polygons by buffering with 0
-    valid_bool = peilgebieden.geometry.is_valid
-    peilgebieden.loc[~valid_bool, 'geometry'] = peilgebieden.loc[~valid_bool].apply(
-        lambda s: s.geometry.buffer(0), axis=1)
-
-    # add information from peilgebieden to BGT
-    # make the geometry of all peilgebieden valid
-    peilgebieden['geometry'] = peilgebieden.buffer(0.0)
-    bgt = cut_gdf_by_polygon_gdf(bgt, peilgebieden, geom_type='Polygon')
-
-    # cut by the grid and add cellid
-    gdf = gdf2grid(bgt, gwf)
-
-    gdf['ahn_min_cell'] = calculate_min_ahn_in_polygons(gdf, fname_ahn)
-
-    return gdf
-
-
-def hhnk_gdf_to_riv(gdf_hhnk, model_ds, gwf):
-    # find out what the top layer is in every river-cell
-    lays = model_ds.first_active_layer[gdf_hhnk['cellid'].values].values
-    spd = []
-    for i, row in enumerate(gdf_hhnk.itertuples()):
-        maaiveld = model_ds['top'].item(row.cellid)
-
-        # determine waterlevel
-        if row.peilafwijking:
-            peilen = np.array([row.ONDERGRENSPEIL, row.BOVENGRENSPEIL])
-            elev = np.nanmean(peilen[~np.isnan(peilen)])
-            if np.isnan(elev):
-                elev = maaiveld - 0.8
-        else:
-            elev = row.VAST
-            if np.isnan(elev):
-                elev = np.nanmean([row.ZOMER, row.WINTER])
-            if np.isnan(elev):
-                elev = row.STREEFPEIL_JAARROND
-            if np.isnan(elev):
-                elev = np.nanmean(
-                    [row.ONDERGRENS_JAARROND, row.BOVENGRENS_JAARROND])
-            if np.isnan(elev):
-                elev = np.nanmean(
-                    [row.STREEFPEIL_WINTER, row.STREEFPEIL_ZOMER])
-            if np.isnan(elev):
-                wi = np.nanmean([row.ONDERGRENS_WINTER, row.BOVENGRENS_WINTER])
-                zo = np.nanmean([row.ONDERGRENS_ZOMER, row.BOVENGRENS_ZOMER])
-                elev = np.nanmean([wi, zo])
-
-        # determine bottom height
-        botm = row.WS_BODEMHOOGTE
-        if elev < botm:
-            # raise the level to the botm
-            elev = botm
-
-        if row.PEILBESLUITPLICHTIG == 'nee':
-            if np.isnan(botm):
-                botm = row.ahn_min_cell
-            # set the elevation to the botm so there will be no infiltration
-            elev = botm = np.nanmax([elev, botm])
-
-        if np.isnan(botm) and np.isnan(elev):
-            # set the elevation to the minimal surface level around the watercourse
-            elev = botm = row.ahn_min
-        if np.isnan(botm) and np.isnan(elev):
-            # when there is no information about the height
-            # assume 0.8 m below surface level
-            elev = botm = maaiveld - 0.8
-        elif np.isnan(elev):
-            # when no elevation is given, set elevation to bottom level
-            # this makes the river a drain
-            elev = botm
-        elif np.isnan(botm):
-            # when no bottom level is given, assume a water depth of 0.2 m
-            botm = elev - 0.2
-
-        if botm > elev:
-            msg = 'Bottom is higher than elevation for {}'.format(row.Index)
-            raise(Exception(msg))
-
-        # assume a resistance of 1 day of the bottom surface
-        resistance = 1.0
-        if row.geometry.geom_type in ['LineString', 'MultiLineString']:
-            # determine conductance = length * width / resistance
-            width = row.WS_BODEMBREEDTE
-            if np.isnan(width):
-                # when no width is given, assume a bottom width of 0.2 m
-                width = 0.2
-            cond = row.geometry.length * width / resistance
-        elif row.geometry.geom_type in ['Polygon', 'MultiPolygon']:
-            cond = row.geometry.area / resistance
-        else:
-            msg = 'Geometry type not supported: {}'
-            raise(msg.format(row.geometry.geom_type))
-
-        spd.append([(lays[i], row.cellid), elev, cond, botm])
-
-    riv = flopy.mf6.ModflowGwfriv(gwf, stress_period_data={0: spd})
-    return riv
 
 
 def gdf2grid(gdf, ml, method="vertex", **kwargs):
