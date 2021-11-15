@@ -5,6 +5,17 @@ Python scripts voor oppervlaktewater-component Utrechts GrondWater model (UGW).
 Voor een uitgebreide uitleg van de Bouwsteen Oppervlaktewater wordt verwezen 
 naar het [rapport](./report/rap_bouwsteen_oppervlaktewater_UGW_incl_bijlage.pdf).
 
+## Inhoudsopgave
+
+-   [Installatie](#Installatie)
+-   [Inhoud repository](#Inhoud-repository)
+-   [Vragen, problemen of suggesties?](#Vragen,-problemen-of-suggesties?)
+-   [Overzicht workflow](#Overzicht-workflow)
+    -   [Ophalen oppervlaktewater gegevens](#Ophalen-oppervlaktewater-gegevens)
+    -   [Omzetting naar MODFLOW-invoer](#Omzetting-naar-MODFLOW-invoer)
+-   [Lokale data](#Lokale-data)
+-   [Auteurs](#Auteurs)
+
 ## Installatie
 
 De instructies hieronder gaan ervan uit dat `conda` (een Python package 
@@ -36,6 +47,14 @@ toegelicht:
 -   `environment.yml`: bestand met benodigde Python packages voor de scripts in deze repository.
 -   `README.md`: dit bestand dat je nu leest
 
+## Vragen, problemen of suggesties?
+
+Als je een probleem tegenkomt in de code, of een suggestie hebt voor hoe het beter kan, of voor iets nieuws, dan kan dat via de [GitHub Issues pagina](https://github.com/ArtesiaWater/UGW/issues). Voordat je een issue meldt, kijk eerst of deze niet al door iemand anders is gemeld op deze pagina. Als dat niet zo is, dan kan je een [nieuwe issue](https://github.com/ArtesiaWater/UGW/issues/new/choose) aanmaken. Het development team zal op de issue reageren om het op te pakken. Bugs in de huidige code worden gefixt, voor nieuwe functionaliteit zal overlegd moeten worden.
+
+Mocht je zelf de oplossing weten, of een bijdrage willen leveren aan de code, dan kan dat en dat wordt zeer op prijs gesteld. Zie [deze pagina ]() voor instructies hoe je suggesties of aanpassingen ter beoordeling kan klaarzetten door het core development team.
+
+Vragen die niet direct over specifieke code/bugs/nieuwe features gaan kunnen gesteld worden via de [Discussions pagina](https://github.com/ArtesiaWater/UGW/discussions).
+
 ## Overzicht workflow
 
 De scripts in deze repository voeren de volgende twee stappen uit:
@@ -52,10 +71,11 @@ gebruiker.
 
 Het ophalen, samenvoegen en valideren van oppervlaktewaterdata haalt de basisdata zoveel mogelijk uit online gegevensbronnen. Er zijn drie json-bestanden
 aangemaakt die de gebruiker in principe niet hoeft aan te passen:
-- `config/administrations.json`: hier staan de organisaties (Rijkswaterstaat en waterschappen) waarvan data gedownloaded wordt, inclusief 
-   een identificatie en een verwijzing naar een shape-file met een polygon per organisatie.
-- `config/sources.json`: hier staan per laag (watervlakken, waterlijnen en peilvakken) een verwijzing naar de web-service of het bestand waar de basisbestanden kan worden gedownload.
-- `validation.json`: hier staat per parameter een transformatie en defaultwaarde.
+
+-   `config/administrations.json`: hier staan de organisaties (Rijkswaterstaat en waterschappen) waarvan data gedownloaded wordt, inclusief 
+     een identificatie en een verwijzing naar een shape-file met een polygon per organisatie.
+-   `config/sources.json`: hier staan per laag (watervlakken, waterlijnen en peilvakken) een verwijzing naar de web-service of het bestand waar de basisbestanden kan worden gedownload.
+-   `validation.json`: hier staat per parameter een transformatie en defaultwaarde.
 
 Helaas zijn niet alle data online beschikbaar en moet een deel lokaal beschikbaar gemaakt worden. Het bestand met deze data heet `sources_admin_waterschappen.zip` 
 en kan [hier gedownload](https://drive.google.com/drive/u/0/folders/1fQ1pFgWc5xxuU5TBbR4kb75z1FNciWTj) worden. Het bestand dient uitgepakt te worden in de `data/sources` map.
@@ -65,20 +85,20 @@ moet een shape-file staan met een of meerdere polygonen die samen het projectgeb
 en de shape-file moeten worden opgegeven in het bestand config.ini in de map `scripts/oppervlaktewater`.
 
 We gaan hieronder uit van de volgende structuur opgegeven in config.ini:
--  `data/project`: de map waarin de data wordt opgeslagen
--  `data/project/extent.shp`: polygon-shape met de grens van het project
+
+-   `data/project`: de map waarin de data wordt opgeslagen
+-   `data/project/extent.shp`: polygon-shape met de grens van het project
 
 De `scripts/config.ini` hoort er dan zo uit te zien:
 
-```
-[general]
-project: project
-extend: extend.shp
-```
+    [general]
+    project: project
+    extend: extend.shp
 
 De scripts zijn genummerd in volgorde:
-- `01_merge_sources.py`: download alle basisbestanden en voegt deze samen. Met bovenstaande `config.ini` in de map `data/project/input`
-- `02_prepare_modflow.py`: converteert en valideert de basisbestanden. Met bovenstaande `config.ini` in de map `data/project/modflow`
+
+-   `01_merge_sources.py`: download alle basisbestanden en voegt deze samen. Met bovenstaande `config.ini` in de map `data/project/input`
+-   `02_prepare_modflow.py`: converteert en valideert de basisbestanden. Met bovenstaande `config.ini` in de map `data/project/modflow`
 
 ### Omzetting naar MODFLOW-invoer
 
@@ -102,6 +122,7 @@ ze in een bepaalde volgorde uitgevoerd moeten worden.
 -   `02_comparison.py`: vergelijking van modeluitkomsten tussen twee modellen.
 
 ## Lokale data
+
 Niet alle data is online toegankelijk. Een deel moet lokaal gemaakt worden. 
 Deze data kan via Google Drive gedownload worden. 
 Zie daarvoor deze link: [Lokale data Google Drive](https://drive.google.com/drive/u/0/folders/1fQ1pFgWc5xxuU5TBbR4kb75z1FNciWTj)
