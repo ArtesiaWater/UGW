@@ -8,12 +8,12 @@ Created on Fri Jun 12 15:33:03 2020
 import os
 import tempfile
 
-import gdal
 import numpy as np
 import rasterio
-from rasterio import merge
 import xarray as xr
+from osgeo import gdal
 from owslib.wcs import WebCoverageService
+from rasterio import merge
 
 from .mgrid import (get_xyi_cid, resample_dataarray_to_structured_grid,
                     resample_dataarray_to_unstructured_grid)

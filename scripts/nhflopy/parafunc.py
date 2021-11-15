@@ -6,21 +6,17 @@ Created on Tue Oct  6 13:45:24 2020
 """
 import os
 
-import xarray as xr
 import numpy as np
-
-from scipy import interpolate
+import xarray as xr
 from pyevtk.hl import gridToVTK
+from scipy import interpolate
 
 
-
-
-
-def model_to_vtk(model_ds, paradir, fname, 
+def model_to_vtk(model_ds, paradir, fname,
                  layer=14,
                  datavar='kh', nan_factor=0.01):
     """
-    
+
     Parameters
     ----------
     model_ds : xarray DataSet
@@ -42,28 +38,28 @@ def model_to_vtk(model_ds, paradir, fname,
     1 if succesfull.
 
     """
-    X = np.append(model_ds.x.values-(model_ds.delr/2), model_ds.x.values[-1]+(model_ds.delr/2))
-    Y = np.append(model_ds.y.values[::-1]-(model_ds.delc/2), model_ds.y.values[::-1][-1]+(model_ds.delc/2))
-    Z = np.linspace(-1,1,2)
-    
-    x,y,z = np.meshgrid(X,Y,Z, indexing='ij')
+    X = np.append(model_ds.x.values - (model_ds.delr / 2),
+                  model_ds.x.values[-1] + (model_ds.delr / 2))
+    Y = np.append(model_ds.y.values[::-1] - (model_ds.delc / 2),
+                  model_ds.y.values[::-1][-1] + (model_ds.delc / 2))
+    Z = np.linspace(-1, 1, 2)
+
+    x, y, z = np.meshgrid(X, Y, Z, indexing='ij')
     x = x.astype(float)
     y = y.astype(float)
-    if layer==0:
+    if layer == 0:
         top = project_to_grid(model_ds['top'], X, Y, nan_factor)
     else:
-        top = project_to_grid(model_ds['bot'][layer-1], X, Y, nan_factor)
-        
+        top = project_to_grid(model_ds['bot'][layer - 1], X, Y, nan_factor)
+
     bot = project_to_grid(model_ds['bot'][layer], X, Y, nan_factor)
-    z[:,:,0] = (top.T*100)
-    z[:,:,1] = (bot.T*100)
-    
-    arr = model_ds[datavar][layer:layer+1].values
+    z[:, :, 0] = (top.T * 100)
+    z[:, :, 1] = (bot.T * 100)
+
+    arr = model_ds[datavar][layer:layer + 1].values
     arr[0] = arr[0][::-1]
     arr = arr.T
-    
-    
-    gridToVTK(os.path.join(paradir, fname), x, y, z, cellData={datavar:arr})
-    
-    return 1
 
+    gridToVTK(os.path.join(paradir, fname), x, y, z, cellData={datavar: arr})
+
+    return 1

@@ -7,17 +7,19 @@ Created on Fri Feb 28 11:16:45 2020
 
 import os
 
+import numpy as np
 import pandas as pd
 import xarray as xr
-import numpy as np
-from . import util, mgrid
+
+from . import mgrid, util
+
 
 def get_layer_models(datadir, extent, delr, delc,
                      regis=True, geotop=True, pwn_model=False,
                      cachedir=None,
                      fname_netcdf='combined_layer_ds.nc',
                      use_cache=False, verbose=False):
-    
+
     combined_ds = util.get_cache_netcdf(use_cache, cachedir, fname_netcdf,
                                         get_combined_layer_models,
                                         verbose=verbose,
@@ -29,11 +31,11 @@ def get_layer_models(datadir, extent, delr, delc,
     return combined_ds
 
 
-def get_combined_layer_models(datadir, extent, delr, delc, 
+def get_combined_layer_models(datadir, extent, delr, delc,
                               regis=True, geotop=True, pwn_model=False,
                               cachedir=None, use_cache=False, verbose=True):
     """ combine layer models into a single layer model. 
-    
+
     Possibilities so far inlcude:
         - regis -> full model based on regis
         - regis and geotop -> holoceen of REGIS is filled with geotop
@@ -41,7 +43,7 @@ def get_combined_layer_models(datadir, extent, delr, delc,
         sides use regis
         - regis, geotop and pwn -> use pwn model where available, below and on 
         the sides use the regis/geotop combination.
-    
+
 
     Parameters
     ----------
@@ -79,124 +81,118 @@ def get_combined_layer_models(datadir, extent, delr, delc,
         combination of layer models.
 
     """
-    
+
     if regis:
         # get local regis dataset
-        regis_path = os.path.join(datadir,'regis_nhflopy.nc')
+        regis_path = os.path.join(datadir, 'regis_nhflopy.nc')
         regis_ds_raw = xr.open_dataset(regis_path).sel(x=slice(extent[0], extent[1]),
                                                        y=slice(extent[2], extent[3]))
-        
+
         # convert regis dataset to grid
-        regis_ds = util.get_ml_layer_dataset_struc(raw_ds=regis_ds_raw, extent=extent, 
-                                                   delr=delr, delc=delc, 
-                                                   cachedir=cachedir, 
+        regis_ds = util.get_ml_layer_dataset_struc(raw_ds=regis_ds_raw, extent=extent,
+                                                   delr=delr, delc=delc,
+                                                   cachedir=cachedir,
                                                    fname_netcdf='regis_ds.nc',
-                                                   use_cache=use_cache, 
+                                                   use_cache=use_cache,
                                                    verbose=verbose)
     else:
         raise ValueError('layer models without REGIS not supported')
-    
+
     if geotop:
-        geotop_path = os.path.join(datadir,'geotop_nhflopy.nc')
-        litho_translate_df = pd.read_csv(os.path.join(datadir, 'geotop','litho_eenheden.csv'), index_col=0)
-        geo_eenheid_translate_df = pd.read_csv(os.path.join(datadir, 'geotop','geo_eenheden.csv'), index_col=0,
+        geotop_path = os.path.join(datadir, 'geotop_nhflopy.nc')
+        litho_translate_df = pd.read_csv(os.path.join(
+            datadir, 'geotop', 'litho_eenheden.csv'), index_col=0)
+        geo_eenheid_translate_df = pd.read_csv(os.path.join(datadir, 'geotop', 'geo_eenheden.csv'), index_col=0,
                                                keep_default_na=False)
-        
-        geotop_ds_raw = get_geotop_raw(geotop_path=geotop_path, 
-                                        regis_ds=regis_ds_raw, 
-                                        regis_layer='HLc',
-                                        litho_translate_df=litho_translate_df,
-                                        geo_eenheid_translate_df=geo_eenheid_translate_df,
-                                        cachedir=cachedir, 
-                                        fname_netcdf='geotop_raw.nc',
-                                        use_cache=use_cache,
-                                        verbose=verbose)
-        
-        geotop_ds = util.get_ml_layer_dataset_struc(raw_ds=geotop_ds_raw, 
-                                                    extent=extent, 
-                                                    delr=delr, delc=delc, 
-                                                    cachedir=cachedir, 
+
+        geotop_ds_raw = get_geotop_raw(geotop_path=geotop_path,
+                                       regis_ds=regis_ds_raw,
+                                       regis_layer='HLc',
+                                       litho_translate_df=litho_translate_df,
+                                       geo_eenheid_translate_df=geo_eenheid_translate_df,
+                                       cachedir=cachedir,
+                                       fname_netcdf='geotop_raw.nc',
+                                       use_cache=use_cache,
+                                       verbose=verbose)
+
+        geotop_ds = util.get_ml_layer_dataset_struc(raw_ds=geotop_ds_raw,
+                                                    extent=extent,
+                                                    delr=delr, delc=delc,
+                                                    cachedir=cachedir,
                                                     fname_netcdf='geotop_ds.nc',
-                                                    use_cache=use_cache, 
+                                                    use_cache=use_cache,
                                                     verbose=verbose)
-    
+
     if regis and geotop:
         regis_geotop_ds = get_regis_geotop_ds(regis_ds, geotop_ds,
-                                              cachedir=cachedir, 
+                                              cachedir=cachedir,
                                               fname_netcdf='regis_geotop_ds.nc',
-                                              use_cache=use_cache, 
+                                              use_cache=use_cache,
                                               verbose=verbose)
-        
+
     if pwn_model:
         model_ws_pwn = r'c:\Users\oebbe\02_python\NHFLO\NHFLO\work\pwn_model'
 
         # load pwn model dataset
-        model_ds_pwn = xr.open_dataset(os.path.join(model_ws_pwn, 'full_model_ds.nc'))
+        model_ds_pwn = xr.open_dataset(
+            os.path.join(model_ws_pwn, 'full_model_ds.nc'))
         model_ds_pwn.attrs['model_name'] = 'pwn_model'
-        
+
         # find overlap between models -> extent_pwn
-        extent_pwn = get_pwn_extent(regis_ds, model_ds_pwn.extent, 
+        extent_pwn = get_pwn_extent(regis_ds, model_ds_pwn.extent,
                                     verbose=verbose)
-        
+
         # convert pwn dataset to grid
-        pwn_ds = util.get_ml_layer_dataset_struc(raw_ds=model_ds_pwn[['bot','top','kh','kv']], 
-                                                 extent=list(extent_pwn), 
-                                                 delr=delr, delc=delc, 
-                                                 cachedir=cachedir, 
+        pwn_ds = util.get_ml_layer_dataset_struc(raw_ds=model_ds_pwn[['bot', 'top', 'kh', 'kv']],
+                                                 extent=list(extent_pwn),
+                                                 delr=delr, delc=delc,
+                                                 cachedir=cachedir,
                                                  fname_netcdf='pwn_ds.nc',
-                                                 use_cache=use_cache, 
+                                                 use_cache=use_cache,
                                                  verbose=verbose)
-        
+
     if regis and geotop and pwn_model:
-        
-        
-        fname_koppeltabel = os.path.join(datadir,'pwn_modellagen', 
+
+        fname_koppeltabel = os.path.join(datadir, 'pwn_modellagen',
                                          'combine_regis_gtop_pwn.xlsx')
-        df_koppeltabel = pd.read_excel(fname_koppeltabel, skiprows=1, 
+        df_koppeltabel = pd.read_excel(fname_koppeltabel, skiprows=1,
                                        index_col=4)
-        
-        
-        
+
         combined_ds = get_pwn_regis_ds(pwn_ds, regis_geotop_ds, datadir,
                                        cachedir=cachedir,
                                        fname_netcdf='pwn_regis_geotop_ds.nc',
                                        df_koppeltabel=df_koppeltabel,
                                        use_cache=use_cache,
                                        verbose=verbose)
-        
-        
-        
-        
+
     elif regis and pwn_model:
-        
-        fname_koppeltabel = os.path.join(datadir,'pwn_modellagen', 
+
+        fname_koppeltabel = os.path.join(datadir, 'pwn_modellagen',
                                          'combine_regis_pwn.xlsx')
-        df_koppeltabel = pd.read_excel(fname_koppeltabel, skiprows=1, 
+        df_koppeltabel = pd.read_excel(fname_koppeltabel, skiprows=1,
                                        index_col=4)
-        
+
         combined_ds = get_pwn_regis_ds(pwn_ds, regis_ds, datadir,
-                                        cachedir=cachedir,
-                                        fname_netcdf='pwn_regis_ds.nc',
-                                        df_koppeltabel=df_koppeltabel,
-                                        use_cache=False,
-                                        verbose=verbose)
-    
+                                       cachedir=cachedir,
+                                       fname_netcdf='pwn_regis_ds.nc',
+                                       df_koppeltabel=df_koppeltabel,
+                                       use_cache=False,
+                                       verbose=verbose)
+
     elif regis and geotop:
         combined_ds = regis_geotop_ds
-        
+
     elif regis:
         combined_ds = regis_ds
-        
-        
+
     else:
         raise ValueError('combination of model layers not supported')
 
-    
     return combined_ds
 
 
 def get_geotop_raw(geotop_path, regis_ds=None, regis_layer=None,
-                   litho_translate_df=None, 
+                   litho_translate_df=None,
                    geo_eenheid_translate_df=None,
                    cachedir=None,
                    fname_netcdf='geotop_raw.nc',
@@ -204,22 +200,22 @@ def get_geotop_raw(geotop_path, regis_ds=None, regis_layer=None,
                    verbose=False):
     """ get geotop raw layer model
     """
-    
+
     geotop_ds_raw = util.get_cache_netcdf(use_cache, cachedir, fname_netcdf,
                                           convert_geotop_to_ml_layers,
                                           verbose=verbose,
-                                          geotop_path=geotop_path, 
+                                          geotop_path=geotop_path,
                                           regis_ds=regis_ds,
                                           regis_layer=regis_layer,
                                           litho_translate_df=litho_translate_df,
                                           geo_eenheid_translate_df=geo_eenheid_translate_df,
                                           check_time=False)
-    
+
     return geotop_ds_raw
 
 
 def convert_geotop_to_ml_layers(geotop_path, regis_ds=None, regis_layer=None,
-                                litho_translate_df=None, 
+                                litho_translate_df=None,
                                 geo_eenheid_translate_df=None,
                                 verbose=False):
     """ does the following steps to obtain model layers based on geotop:
@@ -227,7 +223,7 @@ def convert_geotop_to_ml_layers(geotop_path, regis_ds=None, regis_layer=None,
         2. slice by regis layer (if not None)
         3. compute kh from lithoklasse
         4. create a layer model based on geo-eenheden
-    
+
     Parameters
     ----------
     geotop_path: str
@@ -242,49 +238,49 @@ def convert_geotop_to_ml_layers(geotop_path, regis_ds=None, regis_layer=None,
         dictionary to translate geo_eenheid to a geo name    
     verbose : bool, optional
         print additional information. default is False
-    
+
     Returns
     -------
     geotop_ds_raw: xarray.DataSet
         geotop dataset with added horizontal conductance
 
     """
-    
+
     # stap 1 and 2
     if (regis_ds is not None) and (regis_layer is not None):
         if verbose:
             print(f'slice geotop with regis layer {regis_layer}')
         top_rl = regis_ds.top.sel(layer=regis_layer)
         bot_rl = regis_ds.bottom.sel(layer=regis_layer)
-    
+
         geotop_ds_raw = xr.open_dataset(geotop_path).sel(x=regis_ds.x,
                                                          y=regis_ds.y,
                                                          z=slice(np.floor(bot_rl.min().data),
                                                                  np.ceil(top_rl.max().data)))
     else:
         geotop_ds_raw = xr.open_dataset(geotop_path)
-        
+
     # stap 3 maak kh matrix a.d.v. lithoklasse
     if verbose:
         print('create kh matrix from lithoklasse and csv file')
     kh_from_litho = xr.zeros_like(geotop_ds_raw.lithok)
     for i, row in litho_translate_df.iterrows():
-        kh_from_litho = xr.where(geotop_ds_raw.lithok==i, 
-                                 row['hor_conductance_default'], 
+        kh_from_litho = xr.where(geotop_ds_raw.lithok == i,
+                                 row['hor_conductance_default'],
                                  kh_from_litho)
     geotop_ds_raw['kh_from_litho'] = kh_from_litho
-    
+
     # stap 4 maak een laag per geo-eenheid
     geotop_ds_mod = get_top_bot_from_geo_eenheid(geotop_ds_raw, geo_eenheid_translate_df,
                                                  verbose=verbose)
-        
+
     return geotop_ds_mod
 
 
 def get_top_bot_from_geo_eenheid(geotop_ds_raw, geo_eenheid_translate_df,
                                  verbose=False):
     """ get top, bottom and kh of each geo-eenheid in geotop dataset.
-    
+
     Parameters
     ----------
     geotop_ds_raw: xr.DataSet
@@ -293,65 +289,69 @@ def get_top_bot_from_geo_eenheid(geotop_ds_raw, geo_eenheid_translate_df,
         dictionary to translate geo_eenheid to a geo name
     verbose : bool, optional
         print additional information. default is False
-        
+
     Returns
     -------
     geotop_ds_mod: xr.DataSet
         geotop dataset with top, bot, kh and kv per geo_eenheid
-    
+
     Note
     ----
     the 'geo_eenheid' >6000 are 'stroombanen' these are difficult to add because
     they can occur above and below any other 'geo_eenheid' therefore they are
     added to the geo_eenheid below the stroombaan.
-    
+
     """
-    
 
     # vindt alle geo-eenheden in model_extent
     geo_eenheden = np.unique(geotop_ds_raw.strat.data)
     geo_eenheden = geo_eenheden[np.isfinite(geo_eenheden)]
-    stroombaan_eenheden = geo_eenheden[geo_eenheden<5999]
-    geo_eenheden = geo_eenheden[geo_eenheden<5999]
+    stroombaan_eenheden = geo_eenheden[geo_eenheden < 5999]
+    geo_eenheden = geo_eenheden[geo_eenheden < 5999]
 
     # geo eenheid 2000 zit boven 1130
     if (2000. in geo_eenheden) and (1130. in geo_eenheden):
-        geo_eenheden[(geo_eenheden==2000.) + (geo_eenheden==1130.)]= [2000., 1130.]
+        geo_eenheden[(geo_eenheden == 2000.) +
+                     (geo_eenheden == 1130.)] = [2000., 1130.]
 
-    geo_names = [geo_eenheid_translate_df.loc[geo_eenh, 'Code (lagenmodel en boringen)'] for geo_eenh in geo_eenheden]
+    geo_names = [geo_eenheid_translate_df.loc[geo_eenh,
+                                              'Code (lagenmodel en boringen)'] for geo_eenh in geo_eenheden]
 
     # fill top and bot
-    top = np.ones((geotop_ds_raw.y.shape[0], geotop_ds_raw.x.shape[0], len(geo_names))) * np.nan
-    bot = np.ones((geotop_ds_raw.y.shape[0], geotop_ds_raw.x.shape[0], len(geo_names))) * np.nan
+    top = np.ones(
+        (geotop_ds_raw.y.shape[0], geotop_ds_raw.x.shape[0], len(geo_names))) * np.nan
+    bot = np.ones(
+        (geotop_ds_raw.y.shape[0], geotop_ds_raw.x.shape[0], len(geo_names))) * np.nan
     lay = 0
     if verbose:
         print('creating top and bot per geo eenheid')
     for geo_eenheid in geo_eenheden:
         if verbose:
             print(geo_eenheid)
-        
+
         mask = geotop_ds_raw.strat == geo_eenheid
         geo_z = xr.where(mask, geotop_ds_raw.z, np.nan)
-       
-        top[:,:,lay] = geo_z.max(dim='z').T+0.5
-        bot[:,:,lay] = geo_z.min(dim='z').T
-        
-        lay+=1
-        
-    geotop_ds_mod = add_stroombanen_and_get_kh(geotop_ds_raw, top, bot, 
+
+        top[:, :, lay] = geo_z.max(dim='z').T + 0.5
+        bot[:, :, lay] = geo_z.min(dim='z').T
+
+        lay += 1
+
+    geotop_ds_mod = add_stroombanen_and_get_kh(geotop_ds_raw, top, bot,
                                                geo_names,
                                                verbose=verbose)
-    
+
     geotop_ds_mod.attrs['stroombanen'] = stroombaan_eenheden
-    
+
     return geotop_ds_mod
+
 
 def add_stroombanen_and_get_kh(geotop_ds_raw, top, bot, geo_names, verbose=False):
     """ add stroombanen to tops and bots of geo_eenheden, also computes kh per 
     geo_eenheid. Kh is computed by taking the average of all kh's of a geo_eenheid
     within a cell (e.g. if one geo_eenheid has a thickness of 1,5m in a certain
     cell the kh of the cell is calculated as the mean of the 3 cells in geotop)
-    
+
     Parameters
     ----------
     geotop_ds_raw: xr.DataSet
@@ -364,60 +364,63 @@ def add_stroombanen_and_get_kh(geotop_ds_raw, top, bot, geo_names, verbose=False
         names of each geo_eenheid
     verbose : bool, optional
         print additional information. default is False
-        
+
     Returns
     -------
     geotop_ds_mod: xr.DataSet
         geotop dataset with top, bot, kh and kv per geo_eenheid
 
     """
-    kh = np.ones((geotop_ds_raw.y.shape[0], geotop_ds_raw.x.shape[0], len(geo_names))) * np.nan
-    thickness = np.ones((geotop_ds_raw.y.shape[0], geotop_ds_raw.x.shape[0], len(geo_names))) * np.nan
-    z = xr.ones_like(geotop_ds_raw.lithok)*geotop_ds_raw.z
+    kh = np.ones(
+        (geotop_ds_raw.y.shape[0], geotop_ds_raw.x.shape[0], len(geo_names))) * np.nan
+    thickness = np.ones(
+        (geotop_ds_raw.y.shape[0], geotop_ds_raw.x.shape[0], len(geo_names))) * np.nan
+    z = xr.ones_like(geotop_ds_raw.lithok) * geotop_ds_raw.z
     if verbose:
         print(f'adding stroombanen to top and bot of each layer')
         print(f'get kh for each layer')
-        
+
     for lay in range(top.shape[2]):
         if verbose:
             print(geo_names[lay])
-        if lay==0:
-            top[:,:,0] = np.nanmax(top, axis=2)
+        if lay == 0:
+            top[:, :, 0] = np.nanmax(top, axis=2)
         else:
-            top[:,:,lay] = bot[:,:,lay-1]
-        bot[:,:,lay] = np.where(np.isnan(bot[:,:,lay]), top[:,:,lay], bot[:,:,lay])
-        thickness[:,:,lay] = (top[:,:,lay] - bot[:,:,lay])
-        
-        #check which geotop voxels are within the range of the layer
+            top[:, :, lay] = bot[:, :, lay - 1]
+        bot[:, :, lay] = np.where(
+            np.isnan(bot[:, :, lay]), top[:, :, lay], bot[:, :, lay])
+        thickness[:, :, lay] = (top[:, :, lay] - bot[:, :, lay])
+
+        # check which geotop voxels are within the range of the layer
         bool_z = xr.zeros_like(z)
         for i in range(z.z.shape[0]):
-            bool_z[:,:,i] = np.where((z[:,:,i]>=bot[:,:,lay].T) * (z[:,:,i]<top[:,:,lay].T), True, False)
-            
+            bool_z[:, :, i] = np.where(
+                (z[:, :, i] >= bot[:, :, lay].T) * (z[:, :, i] < top[:, :, lay].T), True, False)
+
         kh_geo = xr.where(bool_z, geotop_ds_raw['kh_from_litho'], np.nan)
-        kh[:,:,lay] = kh_geo.mean(dim='z').T
-    
-    
+        kh[:, :, lay] = kh_geo.mean(dim='z').T
+
     da_top = xr.DataArray(data=top, dims=('y', 'x', 'layer'),
-                          coords={'y': geotop_ds_raw.y,'x': geotop_ds_raw.x,
+                          coords={'y': geotop_ds_raw.y, 'x': geotop_ds_raw.x,
                                   'layer': geo_names})
     da_bot = xr.DataArray(data=bot, dims=('y', 'x', 'layer'),
-                          coords={'y': geotop_ds_raw.y,'x': geotop_ds_raw.x,
+                          coords={'y': geotop_ds_raw.y, 'x': geotop_ds_raw.x,
                                   'layer': geo_names})
     da_kh = xr.DataArray(data=kh, dims=('y', 'x', 'layer'),
-                         coords={'y': geotop_ds_raw.y,'x': geotop_ds_raw.x,
+                         coords={'y': geotop_ds_raw.y, 'x': geotop_ds_raw.x,
                                  'layer': geo_names})
     da_thick = xr.DataArray(data=thickness, dims=('y', 'x', 'layer'),
-                            coords={'y': geotop_ds_raw.y,'x': geotop_ds_raw.x,
+                            coords={'y': geotop_ds_raw.y, 'x': geotop_ds_raw.x,
                                     'layer': geo_names})
-    
-    geotop_ds_mod = xr.Dataset()   
-    
+
+    geotop_ds_mod = xr.Dataset()
+
     geotop_ds_mod['top'] = da_top
     geotop_ds_mod['bottom'] = da_bot
-    geotop_ds_mod['kh']  = da_kh
-    geotop_ds_mod['kv']  = geotop_ds_mod['kh'] * .25
+    geotop_ds_mod['kh'] = da_kh
+    geotop_ds_mod['kv'] = geotop_ds_mod['kh'] * .25
     geotop_ds_mod['thickness'] = da_thick
-    
+
     return geotop_ds_mod
 
 
@@ -426,7 +429,7 @@ def get_regis_geotop_ds(regis_ds, geotop_ds, cachedir=None,
                         use_cache=False,
                         verbose=False):
     """ Get a combination of regis and geotop for the model layers.
-    
+
     Parameters
     ----------
     regis_ds: xarray.DataSet
@@ -435,29 +438,28 @@ def get_regis_geotop_ds(regis_ds, geotop_ds, cachedir=None,
         regis dataset
     verbose : bool, optional
         print additional information. default is False
-    
+
     Returns
     -------
     regis_geotop_ds: xr.DataSet
         combined dataset  
     """
-    
-    
-    
+
     regis_geotop_ds = util.get_cache_netcdf(use_cache, cachedir, fname_netcdf,
                                             add_geotop_to_regis_hlc,
                                             verbose=verbose,
                                             regis_ds=regis_ds,
                                             geotop_ds=geotop_ds,
                                             check_time=False)
-    
+
     return regis_geotop_ds
+
 
 def add_geotop_to_regis_hlc(regis_ds, geotop_ds, float_correctie=0.001,
                             verbose=False):
     """ Combine geotop and regis in such a way that the holoceen in Regis is
     replaced by the geo_eenheden of geotop.
-    
+
     Parameters
     ----------
     regis_ds: xarray.DataSet
@@ -470,88 +472,97 @@ def add_geotop_to_regis_hlc(regis_ds, geotop_ds, float_correctie=0.001,
         used.
     verbose : bool, optional
         print additional information. default is False
-    
+
     Returns
     -------
     regis_geotop_ds: xr.DataSet
         combined dataset  
-    
-    
+
+
     """
     regis_geotop_ds = xr.Dataset()
-    
-    new_layers = np.append(geotop_ds.layer.data, regis_ds.layer.data[1:].astype('<U8')).astype('O')
-    
+
+    new_layers = np.append(geotop_ds.layer.data,
+                           regis_ds.layer.data[1:].astype('<U8')).astype('O')
+
     top = xr.DataArray(dims=('layer', 'y', 'x'),
-                       coords={'y': geotop_ds.y,'x': geotop_ds.x,
+                       coords={'y': geotop_ds.y, 'x': geotop_ds.x,
                                'layer': new_layers})
     bot = xr.DataArray(dims=('layer', 'y', 'x'),
-                       coords={'y': geotop_ds.y,'x': geotop_ds.x,
+                       coords={'y': geotop_ds.y, 'x': geotop_ds.x,
                                'layer': new_layers})
     kh = xr.DataArray(dims=('layer', 'y', 'x'),
-                      coords={'y': geotop_ds.y,'x': geotop_ds.x,
+                      coords={'y': geotop_ds.y, 'x': geotop_ds.x,
                               'layer': new_layers})
     kv = xr.DataArray(dims=('layer', 'y', 'x'),
-                      coords={'y': geotop_ds.y,'x': geotop_ds.x,
+                      coords={'y': geotop_ds.y, 'x': geotop_ds.x,
                               'layer': new_layers})
-    
+
     # haal overlap tussen geotop en regis weg
     if verbose:
         print('cut geotop layer based on regis holoceen')
     for lay in range(geotop_ds.dims['layer']):
         # Alle geotop cellen die onder de onderkant van het holoceen liggen worden inactief
-        mask1 = geotop_ds['top'][lay]<=(regis_ds['bottom'][0] - float_correctie)
+        mask1 = geotop_ds['top'][lay] <= (
+            regis_ds['bottom'][0] - float_correctie)
         geotop_ds['top'][lay] = xr.where(mask1, np.nan, geotop_ds['top'][lay])
-        geotop_ds['bottom'][lay] = xr.where(mask1, np.nan, geotop_ds['bottom'][lay])
-        
+        geotop_ds['bottom'][lay] = xr.where(
+            mask1, np.nan, geotop_ds['bottom'][lay])
+
         # Alle geotop cellen waarvan de bodem onder de onderkant van het holoceen ligt, krijgen als bodem de onderkant van het holoceen
-        mask2 = geotop_ds['bottom'][lay]<regis_ds['bottom'][0]
-        geotop_ds['bottom'][lay] = xr.where(mask2 * (~mask1), regis_ds['bottom'][0], geotop_ds['bottom'][lay])
-        
+        mask2 = geotop_ds['bottom'][lay] < regis_ds['bottom'][0]
+        geotop_ds['bottom'][lay] = xr.where(
+            mask2 * (~mask1), regis_ds['bottom'][0], geotop_ds['bottom'][lay])
+
         # Alle geotop cellen die boven de bovenkant van het holoceen liggen worden inactief
-        mask3 = geotop_ds['bottom'][lay]>=(regis_ds['top'][0] - float_correctie)
+        mask3 = geotop_ds['bottom'][lay] >= (
+            regis_ds['top'][0] - float_correctie)
         geotop_ds['top'][lay] = xr.where(mask3, np.nan, geotop_ds['top'][lay])
-        geotop_ds['bottom'][lay] = xr.where(mask3, np.nan, geotop_ds['bottom'][lay])
-        
+        geotop_ds['bottom'][lay] = xr.where(
+            mask3, np.nan, geotop_ds['bottom'][lay])
+
         # Alle geotop cellen waarvan de top boven de top van het holoceen ligt, krijgen als top het holoceen van regis
-        mask4 = geotop_ds['top'][lay]>=regis_ds['top'][0]
-        geotop_ds['top'][lay] = xr.where(mask4 * (~mask3), regis_ds['top'][0], geotop_ds['top'][lay])
-        
+        mask4 = geotop_ds['top'][lay] >= regis_ds['top'][0]
+        geotop_ds['top'][lay] = xr.where(
+            mask4 * (~mask3), regis_ds['top'][0], geotop_ds['top'][lay])
+
         # overal waar holoceen inactief is, wordt geotop ook inactief
         mask5 = regis_ds['bottom'][0].isnull()
         geotop_ds['top'][lay] = xr.where(mask5, np.nan, geotop_ds['top'][lay])
-        geotop_ds['bottom'][lay] = xr.where(mask5, np.nan, geotop_ds['bottom'][lay])
+        geotop_ds['bottom'][lay] = xr.where(
+            mask5, np.nan, geotop_ds['bottom'][lay])
         if verbose:
-            if (mask2 * (~mask1)).sum()>0:
-                print(f'regis holoceen snijdt door laag {geotop_ds.layer[lay].values}')
-        
-    
-    top[:len(geotop_ds.layer),:,:] = geotop_ds['top'].data
-    top[len(geotop_ds.layer):,:,:] = regis_ds['top'].data[1:]
-    
-    bot[:len(geotop_ds.layer),:,:] = geotop_ds['bottom'].data
-    bot[len(geotop_ds.layer):,:,:] = regis_ds['bottom'].data[1:]  
-    
-    kh[:len(geotop_ds.layer),:,:] = geotop_ds['kh'].data
-    kh[len(geotop_ds.layer):,:,:] = regis_ds['kh'].data[1:]  
-    
-    kv[:len(geotop_ds.layer),:,:] = geotop_ds['kv'].data
-    kv[len(geotop_ds.layer):,:,:] = regis_ds['kv'].data[1:]  
-        
+            if (mask2 * (~mask1)).sum() > 0:
+                print(
+                    f'regis holoceen snijdt door laag {geotop_ds.layer[lay].values}')
+
+    top[:len(geotop_ds.layer), :, :] = geotop_ds['top'].data
+    top[len(geotop_ds.layer):, :, :] = regis_ds['top'].data[1:]
+
+    bot[:len(geotop_ds.layer), :, :] = geotop_ds['bottom'].data
+    bot[len(geotop_ds.layer):, :, :] = regis_ds['bottom'].data[1:]
+
+    kh[:len(geotop_ds.layer), :, :] = geotop_ds['kh'].data
+    kh[len(geotop_ds.layer):, :, :] = regis_ds['kh'].data[1:]
+
+    kv[:len(geotop_ds.layer), :, :] = geotop_ds['kv'].data
+    kv[len(geotop_ds.layer):, :, :] = regis_ds['kv'].data[1:]
+
     regis_geotop_ds['top'] = top
     regis_geotop_ds['bottom'] = bot
-    regis_geotop_ds['kh']  = kh
-    regis_geotop_ds['kv']  = kv
-    
+    regis_geotop_ds['kh'] = kh
+    regis_geotop_ds['kv'] = kv
+
     _ = [regis_geotop_ds.attrs.update({key: item})
-                 for key, item in regis_ds.attrs.items()]
-    
-    #maak bottom nan waar de laagdikte 0 is
-    regis_geotop_ds['bottom'] = xr.where((regis_geotop_ds['top']-regis_geotop_ds['bottom'])<float_correctie, 
-                                          np.nan,
-                                          regis_geotop_ds['bottom'])
-    
+         for key, item in regis_ds.attrs.items()]
+
+    # maak bottom nan waar de laagdikte 0 is
+    regis_geotop_ds['bottom'] = xr.where((regis_geotop_ds['top'] - regis_geotop_ds['bottom']) < float_correctie,
+                                         np.nan,
+                                         regis_geotop_ds['bottom'])
+
     return regis_geotop_ds
+
 
 def get_pwn_regis_ds(pwn_ds, regis_ds, datadir=None,
                      df_koppeltabel=None,
@@ -560,7 +571,7 @@ def get_pwn_regis_ds(pwn_ds, regis_ds, datadir=None,
                      use_cache=False,
                      verbose=False):
     """
-    
+
 
     Parameters
     ----------
@@ -583,21 +594,22 @@ def get_pwn_regis_ds(pwn_ds, regis_ds, datadir=None,
         combined model
 
     """
-    
+
     pwn_regis_ds = util.get_cache_netcdf(use_cache, cachedir, fname_netcdf,
                                          create_pwn_regis_ds,
                                          verbose=verbose,
-                                         check_time=False, 
+                                         check_time=False,
                                          pwn_ds=pwn_ds, regis_ds=regis_ds,
                                          datadir=datadir,
                                          df_koppeltabel=df_koppeltabel)
-    
+
     return pwn_regis_ds
+
 
 def create_pwn_regis_ds(pwn_ds, regis_ds, datadir=None,
                         df_koppeltabel=None, verbose=True):
     """ Create a new layer model based on regis and pwn models.
-    
+
 
     Parameters
     ----------
@@ -623,20 +635,21 @@ def create_pwn_regis_ds(pwn_ds, regis_ds, datadir=None,
         combined model
 
     """
-    
-    if util.compare_model_extents(regis_ds.extent, pwn_ds.extent, verbose)==1:
+
+    if util.compare_model_extents(regis_ds.extent, pwn_ds.extent, verbose) == 1:
         pwn_regis_ds = add_regis_to_bottom_of_pwn(pwn_ds, regis_ds, verbose)
     else:
-        pwn_regis_ds = combine_layer_models_regis_pwn(pwn_ds, regis_ds, 
+        pwn_regis_ds = combine_layer_models_regis_pwn(pwn_ds, regis_ds,
                                                       datadir, df_koppeltabel,
                                                       verbose)
-        
+
     return pwn_regis_ds
+
 
 def combine_layer_models_regis_pwn(pwn_ds, regis_ds, datadir=None,
                                    df_koppeltabel=None, verbose=False):
     """ combine model layers from regis and pwn using a 'koppeltabel'
-    
+
 
     Parameters
     ----------
@@ -649,7 +662,7 @@ def combine_layer_models_regis_pwn(pwn_ds, regis_ds, datadir=None,
     df_koppeltabel : pandas DataFrame, optional
         dataframe van koppeltabel. The default is None.
     verbose : bool, optional
-        
+
 
     Raises
     ------
@@ -663,44 +676,43 @@ def combine_layer_models_regis_pwn(pwn_ds, regis_ds, datadir=None,
     """
 
     if df_koppeltabel is None:
-        fname_koppeltabel = os.path.join(datadir,'pwn_modellagen', 
+        fname_koppeltabel = os.path.join(datadir, 'pwn_modellagen',
                                          'combine_regis_pwn.xlsx')
-        df_koppeltabel = pd.read_excel(fname_koppeltabel, skiprows=1, 
+        df_koppeltabel = pd.read_excel(fname_koppeltabel, skiprows=1,
                                        index_col=4)
 
     pwn_regis_ds = xr.Dataset(coords={'x': regis_ds.x.data,
                                       'y': regis_ds.y.data,
                                       'layer': df_koppeltabel.index.values})
-    
+
     _ = [pwn_regis_ds.attrs.update({key: item})
          for key, item in regis_ds.attrs.items()]
-    
+
     empty_da = xr.DataArray(dims=('layer', 'y', 'x'),
                             coords={'x': regis_ds.x.data,
                                     'y': regis_ds.y.data,
                                     'layer': df_koppeltabel.index.values})
-    
-    
+
     bot = empty_da.copy()
     top = empty_da.copy()
     kh = empty_da.copy()
     kv = empty_da.copy()
-    
-    y_mask = [True  if y in pwn_ds.y else False for y in regis_ds.y.values]
-    x_mask = [True  if x in pwn_ds.x else False for x in regis_ds.x.values]
-    
+
+    y_mask = [True if y in pwn_ds.y else False for y in regis_ds.y.values]
+    x_mask = [True if x in pwn_ds.x else False for x in regis_ds.x.values]
+
     column_reg_mod = df_koppeltabel.columns[1]
     for i, lay in enumerate(df_koppeltabel.index):
         regis_lay = df_koppeltabel.loc[lay, column_reg_mod]
-        pwn_lay   = df_koppeltabel.loc[lay, 'pwn_lay']
-        
+        pwn_lay = df_koppeltabel.loc[lay, 'pwn_lay']
+
         if verbose:
             print(f'combine regis layer {regis_lay} with pwn layer {pwn_lay}')
-            
-        
-        if regis_lay==pwn_lay:
-            raise ValueError(f'invalid values encountered, regis layer is {regis_lay} and pwn layer is {pwn_lay}')
-        
+
+        if regis_lay == pwn_lay:
+            raise ValueError(
+                f'invalid values encountered, regis layer is {regis_lay} and pwn layer is {pwn_lay}')
+
         if isinstance(regis_lay, str):
             bot[i] = regis_ds.bottom.sel(layer=regis_lay)
             top[i] = regis_ds.top.sel(layer=regis_lay)
@@ -713,48 +725,51 @@ def combine_layer_models_regis_pwn(pwn_ds, regis_ds, datadir=None,
             kv[i] = np.nan
         else:
             raise ValueError('invalid value encountered in regis_lay_nam')
-        
-        
-        if isinstance(pwn_lay,int):
+
+        if isinstance(pwn_lay, int):
             # brand pwn modellaag in regis laag
-            bot[i,y_mask,x_mask] = pwn_ds.bot.sel(layer=pwn_lay-1)
-            top[i,y_mask,x_mask] = pwn_ds.top.sel(layer=pwn_lay-1)
-            kh[i,y_mask,x_mask] = pwn_ds.kh.sel(layer=pwn_lay-1)
-            kv[i,y_mask,x_mask] = pwn_ds.kv.sel(layer=pwn_lay-1)
+            bot[i, y_mask, x_mask] = pwn_ds.bot.sel(layer=pwn_lay - 1)
+            top[i, y_mask, x_mask] = pwn_ds.top.sel(layer=pwn_lay - 1)
+            kh[i, y_mask, x_mask] = pwn_ds.kh.sel(layer=pwn_lay - 1)
+            kv[i, y_mask, x_mask] = pwn_ds.kv.sel(layer=pwn_lay - 1)
             pwn_final_lay = pwn_lay
-        elif pwn_lay =='REGIS':
+        elif pwn_lay == 'REGIS':
             # plak REGIS model onder pwn model
-            regis_bot = bot[i,y_mask, x_mask]
-            regis_top = top[i,y_mask,x_mask]
-            regis_kh  = kh[i,y_mask,x_mask]
-            regis_kv  = kv[i,y_mask,x_mask]
-            pwn_bot = pwn_ds.bot.sel(layer=pwn_final_lay-1)
-            
-            bot[i,y_mask, x_mask] = xr.where(regis_bot<pwn_bot, regis_bot, np.nan)
-            top[i,y_mask, x_mask] = xr.where(regis_top<pwn_bot, regis_top, pwn_bot)
-            kh[i,y_mask,x_mask] = xr.where(regis_bot<pwn_bot, regis_kh, np.nan)
-            kv[i,y_mask,x_mask] = xr.where(regis_bot<pwn_bot, regis_kv, np.nan)
+            regis_bot = bot[i, y_mask, x_mask]
+            regis_top = top[i, y_mask, x_mask]
+            regis_kh = kh[i, y_mask, x_mask]
+            regis_kv = kv[i, y_mask, x_mask]
+            pwn_bot = pwn_ds.bot.sel(layer=pwn_final_lay - 1)
+
+            bot[i, y_mask, x_mask] = xr.where(
+                regis_bot < pwn_bot, regis_bot, np.nan)
+            top[i, y_mask, x_mask] = xr.where(
+                regis_top < pwn_bot, regis_top, pwn_bot)
+            kh[i, y_mask, x_mask] = xr.where(
+                regis_bot < pwn_bot, regis_kh, np.nan)
+            kv[i, y_mask, x_mask] = xr.where(
+                regis_bot < pwn_bot, regis_kv, np.nan)
         elif np.isnan(pwn_lay):
             # maak laag met idomain -1 waar wel regis maar geen pwn laag zit
-            bot[i,y_mask,x_mask] = np.nan
-            top[i,y_mask,x_mask] = np.nan
-            kh[i,y_mask,x_mask] = np.nan
-            kv[i,y_mask,x_mask] = np.nan
+            bot[i, y_mask, x_mask] = np.nan
+            top[i, y_mask, x_mask] = np.nan
+            kh[i, y_mask, x_mask] = np.nan
+            kv[i, y_mask, x_mask] = np.nan
         else:
             raise ValueError('invalid value encountered in pwn_lay')
-    
+
     pwn_regis_ds['bottom'] = bot
     pwn_regis_ds['top'] = top
     pwn_regis_ds['kh'] = kh
     pwn_regis_ds['kv'] = kv
-    
+
     return pwn_regis_ds
 
-    
+
 def add_regis_to_bottom_of_pwn(pwn_ds, regis_ds, verbose=False):
     """ extend the pwn model by using the regis model for the layers below
     the pwn model.
-    
+
 
     Parameters
     ----------
@@ -772,12 +787,13 @@ def add_regis_to_bottom_of_pwn(pwn_ds, regis_ds, verbose=False):
     lay_count = len(pwn_ds.layer)
     new_bot = pwn_ds['bot'].data.copy()
     new_top = pwn_ds['top'].data.copy()
-    new_kh  = pwn_ds['kh'].data.copy()
-    new_kv  = pwn_ds['kv'].data.copy()
+    new_kh = pwn_ds['kh'].data.copy()
+    new_kv = pwn_ds['kv'].data.copy()
     new_layer = pwn_ds['bot'].layer.data.copy()
     lname_regis = []
     for lay in regis_ds.layer:
-        mask_lay = pwn_ds['bot'][-1].data>regis_ds['bottom'].sel(layer=lay).data
+        mask_lay = pwn_ds['bot'][-1].data > regis_ds['bottom'].sel(
+            layer=lay).data
         if mask_lay.any():
             bot_lay = np.where(mask_lay,
                                regis_ds['bottom'].sel(layer=lay).data,
@@ -788,54 +804,56 @@ def add_regis_to_bottom_of_pwn(pwn_ds, regis_ds, verbose=False):
             kv_lay = np.where(mask_lay,
                               regis_ds['kv'].sel(layer=lay).data,
                               np.nan)
-            top_lay = new_bot[lay_count-1]
+            top_lay = new_bot[lay_count - 1]
             new_bot = np.concatenate((new_bot, np.array([bot_lay])))
-            new_kh  = np.concatenate((new_kh, np.array([kh_lay])))
-            new_kv  = np.concatenate((new_kv, np.array([kv_lay])))
+            new_kh = np.concatenate((new_kh, np.array([kh_lay])))
+            new_kv = np.concatenate((new_kv, np.array([kv_lay])))
             new_top = np.concatenate((new_top, np.array([top_lay])))
             lname_regis.append(str(lay.values))
             new_layer = np.append(new_layer, lay_count)
-            lay_count+=1
+            lay_count += 1
             if verbose:
-                print(f'adding regis layer {str(lay.values)}  to pwn_model layers' )
-         
-            
-    pwn_regis_ds = xr.Dataset(coords={'x':pwn_ds.x, 
-                                      'y':pwn_ds.y, 
-                                      'layer':new_layer})
-        
+                print(
+                    f'adding regis layer {str(lay.values)}  to pwn_model layers')
+
+    pwn_regis_ds = xr.Dataset(coords={'x': pwn_ds.x,
+                                      'y': pwn_ds.y,
+                                      'layer': new_layer})
+
     pwn_regis_ds['bottom'] = xr.DataArray(new_bot, dims=('layer', 'y', 'x'),
-                                       coords={'layer':new_layer,
-                                               'x':pwn_ds.x, 
-                                               'y':pwn_ds.y})
+                                          coords={'layer': new_layer,
+                                                  'x': pwn_ds.x,
+                                                  'y': pwn_ds.y})
     pwn_regis_ds['top'] = xr.DataArray(new_top, dims=('layer', 'y', 'x'),
-                                       coords={'layer':new_layer,
-                                               'x':pwn_ds.x, 
-                                               'y':pwn_ds.y})
+                                       coords={'layer': new_layer,
+                                               'x': pwn_ds.x,
+                                               'y': pwn_ds.y})
     pwn_regis_ds['kh'] = xr.DataArray(new_kh, dims=('layer', 'y', 'x'),
-                                      coords={'layer':new_layer,
-                                               'x':pwn_ds.x, 
-                                               'y':pwn_ds.y})
+                                      coords={'layer': new_layer,
+                                              'x': pwn_ds.x,
+                                              'y': pwn_ds.y})
     pwn_regis_ds['kv'] = xr.DataArray(new_kv, dims=('layer', 'y', 'x'),
-                                      coords={'layer':new_layer,
-                                               'x':pwn_ds.x, 
-                                               'y':pwn_ds.y})
-    
-    lname_pwn = [f'pwn_lay_{i+1}' for i in range(len(pwn_ds.layer))]           
+                                      coords={'layer': new_layer,
+                                              'x': pwn_ds.x,
+                                              'y': pwn_ds.y})
+
+    lname_pwn = [f'pwn_lay_{i+1}' for i in range(len(pwn_ds.layer))]
     lnames_pwn_regis = lname_pwn + lname_regis
-    
+
     pwn_regis_ds['lnames'] = xr.DataArray(lnames_pwn_regis, dims=('layer'),
-                                          coords={'layer':new_layer})           
-    
-    _ = [pwn_regis_ds.attrs.update({key: item}) for key, item in regis_ds.attrs.items()]
-    
+                                          coords={'layer': new_layer})
+
+    _ = [pwn_regis_ds.attrs.update({key: item})
+         for key, item in regis_ds.attrs.items()]
+
     return pwn_regis_ds
+
 
 def get_pwn_extent(regis_ds, pwn_extent_original,
                    verbose=False):
     """ get the extent of the part of the pwn model that is inside the 
     regis model.
-    
+
 
     Parameters
     ----------
@@ -850,28 +868,29 @@ def get_pwn_extent(regis_ds, pwn_extent_original,
         extent of the part of the pwn model that is inside the regis model
 
     """
-    
-    model_layer_combi_type = util.compare_model_extents(regis_ds.extent, 
-                                                        pwn_extent_original, 
+
+    model_layer_combi_type = util.compare_model_extents(regis_ds.extent,
+                                                        pwn_extent_original,
                                                         verbose=verbose)
-    
+
     delr = regis_ds.delr
     delc = regis_ds.delc
-    
+
     x = regis_ds.x.values
     y = regis_ds.y.values
-    
-    if model_layer_combi_type==1:
+
+    if model_layer_combi_type == 1:
         new_pwn_extent = regis_ds.extent.copy()
-        
+
     else:
-        xmin = x[x>=(pwn_extent_original[0]+0.5*delr)].min() - 0.5*delr
-        xmax = x[x<=(pwn_extent_original[1]-0.5*delr)].max() + 0.5*delr
-        ymin = y[y>=(pwn_extent_original[2]+0.5*delc)].min() - 0.5*delc
-        ymax = y[y<=(pwn_extent_original[3]-0.5*delc)].max() + 0.5*delc
+        xmin = x[x >= (pwn_extent_original[0] + 0.5 * delr)].min() - 0.5 * delr
+        xmax = x[x <= (pwn_extent_original[1] - 0.5 * delr)].max() + 0.5 * delr
+        ymin = y[y >= (pwn_extent_original[2] + 0.5 * delc)].min() - 0.5 * delc
+        ymax = y[y <= (pwn_extent_original[3] - 0.5 * delc)].max() + 0.5 * delc
         new_pwn_extent = [xmin, xmax, ymin, ymax]
-        
+
     return new_pwn_extent
+
 
 def add_kh_kv_from_ml_layer_to_dataset(ml_layer_ds, model_ds, anisotropy,
                                        fill_value_kh, fill_value_kv,
@@ -1369,7 +1388,6 @@ def fill_top_bot_kh_kv_at_mask(model_ds, fill_mask,
             model_ds['kv'][lay] = xr.where(fill_mask * mask_top,
                                            model_ds['kv'][lay],
                                            kv_filled)
-       
 
     return model_ds
 

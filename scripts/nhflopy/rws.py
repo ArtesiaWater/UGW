@@ -1,16 +1,17 @@
-import requests
-import numpy as np
-import pandas as pd
-from pyproj import Proj, transform
+import json
 import os
 import zipfile
-from owslib.wfs import WebFeatureService
+
+import geopandas as gpd
+import numpy as np
+import pandas as pd
+import requests
 from owslib.etree import etree
 from owslib.fes import PropertyIsEqualTo
-import json
-import geopandas as gpd
-from tqdm import tqdm
+from owslib.wfs import WebFeatureService
+from pyproj import Proj, transform
 from shapely.geometry import Point
+from tqdm import tqdm
 
 # https://www.rijkswaterstaat.nl/rws/opendata/
 # https://www.rijkswaterstaat.nl/rws/opendata/DistributielaagWebservices-SUM-2v7.pdf

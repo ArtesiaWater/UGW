@@ -10,24 +10,23 @@ import time
 import warnings
 
 import fiona
-import gdal
+import flopy
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import requests
-import xarray as xr
-from owslib.wfs import WebFeatureService
-from shapely.geometry import mapping, shape, LineString, Polygon, Point
-from shapely.strtree import STRtree
-from tqdm import tqdm
 import rasterio
 import rasterio.features
+import requests
+import xarray as xr
+from osgeo import gdal
+from owslib.wfs import WebFeatureService
+from shapely.geometry import LineString, Point, Polygon, mapping, shape
+from shapely.strtree import STRtree
+from tqdm import tqdm
 
-import flopy
+from . import ahn, mgrid, panden, rws, util
 from .arcrest import ArcREST
-
-from . import mgrid, util, rws, panden, ahn
 
 
 def get_general_head_boundary(model_ds, gdf,

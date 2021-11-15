@@ -6,13 +6,13 @@ Created on Tue Apr  7 13:11:03 2020
 """
 
 import os
-import tempfile
-import requests
 import re
+import tempfile
 
+import geopandas as gpd
 import numpy as np
 import pandas as pd
-import geopandas as gpd
+import requests
 import xarray as xr
 from shapely.geometry import box
 
@@ -122,18 +122,18 @@ def check_model_ds(model_ds, model_ds2, check_grid=True, check_time=True,
     if model_ds.gridtype == 'structured':
         try:
             if check_grid:
-                #check x coordinates
+                # check x coordinates
                 len_x = model_ds['x'].shape == model_ds2['x'].shape
                 comp_x = model_ds['x'] == model_ds2['x']
-                if (len(comp_x)>0) and comp_x.all() and len_x:
+                if (len(comp_x) > 0) and comp_x.all() and len_x:
                     check_x = True
                 else:
                     check_x = False
-                
-                #check y coordinates
+
+                # check y coordinates
                 len_y = model_ds['y'].shape == model_ds2['y'].shape
                 comp_y = model_ds['y'] == model_ds2['y']
-                if (len(comp_y)>0) and comp_y.all() and len_y:
+                if (len(comp_y) > 0) and comp_y.all() and len_y:
                     check_y = True
                 else:
                     check_y = False

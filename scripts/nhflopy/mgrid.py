@@ -9,19 +9,18 @@ import os
 import pickle
 import tempfile
 
+import flopy
 import numpy as np
+import rasterio
 import xarray as xr
+from flopy.utils.gridgen import Gridgen
+from flopy.utils.gridintersect import GridIntersect
+from rasterio.warp import reproject
 from scipy import interpolate
 from scipy.interpolate import griddata
 from shapely.prepared import prep
-import rasterio
-from rasterio.warp import reproject
-
-import flopy
 
 from . import util
-from flopy.utils.gridintersect import GridIntersect
-from flopy.utils.gridgen import Gridgen
 
 
 def update_model_ds_from_ml_layer_ds(model_ds, ml_layer_ds, keep_vars=None,
@@ -459,10 +458,11 @@ def resample_dataarray_to_structured_grid(da_in, extent=None, delr=None, delc=No
 
     return da_out
 
+
 def resample_2d_struc_da_nan_linear(da_in, new_x, new_y,
                                     nan_factor=0.01):
     """ resample a structured, 2d data-array with nan values onto a new grid
-    
+
     Parameters
     ----------
     da_in : xarray DataArray
@@ -496,7 +496,7 @@ def resample_2d_struc_da_nan_linear(da_in, new_x, new_y,
     nan_new = f_nan(new_x, new_y)
     arr_out_raw[nan_new > nan_factor] = np.nan
     arr_out = arr_out_raw[::-1]
-    
+
     return arr_out
 
 

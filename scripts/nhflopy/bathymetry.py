@@ -15,8 +15,7 @@ import numpy as np
 import requests
 import xarray as xr
 
-from . import mgrid
-from . import util
+from . import mgrid, util
 
 
 def get_modelgrid_bathymetry(model_ds, extent, datadir,
@@ -85,14 +84,14 @@ def bathymetry_to_model_dataset(model_ds, extent, datadir,
     data is resampled to the modelgrid. Maybe we can speed up things by
     changing the order in which operations are executed.
     """
-    pre_processed_jarkus = os.path.join(datadir, 'bathymetry', 
+    pre_processed_jarkus = os.path.join(datadir, 'bathymetry',
                                         'jarkus_nhflopy.nc')
-    
+
     if os.path.isfile(pre_processed_jarkus):
         ds_bathymetry_raw = xr.open_dataset(pre_processed_jarkus)
     else:
         ds_bathymetry_raw = get_dataset_jarkus(extent, datadir, use_cache=True)
-        
+
     da_bathymetry_raw = ds_bathymetry_raw['z']
 
     # fill nan values in bathymetry

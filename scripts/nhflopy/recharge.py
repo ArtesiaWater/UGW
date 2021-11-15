@@ -4,15 +4,15 @@ Created on Mon Apr  6 11:08:08 2020
 
 @author: oebbe
 """
-import numpy as np
-import pandas as pd
-import xarray as xr
 import datetime as dt
 
 import flopy
 import hydropandas as hpd
-from . import mgrid
-from . import util
+import numpy as np
+import pandas as pd
+import xarray as xr
+
+from . import mgrid, util
 
 
 def get_recharge(model_ds,
@@ -111,7 +111,7 @@ def add_knmi_to_model_dataset(model_ds,
         end = end_ts + pd.Timedelta(1, unit='D')
 
     model_ds_out = util.get_model_ds_empty(model_ds)
-    
+
     # get recharge data array
     if (model_ds.gridtype == 'structured') and model_ds.steady_state:
         empty_time_array = np.zeros((model_ds.dims['y'],
@@ -126,7 +126,7 @@ def add_knmi_to_model_dataset(model_ds,
                                      model_ds.dims['time']))
         model_ds_out['recharge'] = xr.DataArray(empty_time_array,
                                                 dims=('y', 'x', 'time'),
-                                                coords={'time':model_ds.time,
+                                                coords={'time': model_ds.time,
                                                         'x': model_ds.x,
                                                         'y': model_ds_out.y})
     elif (model_ds.gridtype == 'unstructured') and model_ds.steady_state:
@@ -138,8 +138,8 @@ def add_knmi_to_model_dataset(model_ds,
         empty_time_array = np.zeros((model_ds.dims['cid'],
                                      model_ds.dims['time']))
         model_ds_out['recharge'] = xr.DataArray(empty_time_array,
-                                                dims=('cid','time'),
-                                                coords={'time':model_ds.time,
+                                                dims=('cid', 'time'),
+                                                coords={'time': model_ds.time,
                                                         'cid': model_ds.cid})
 
     locations, oc_knmi_prec, oc_knmi_evap = get_knmi_at_locations(model_ds,
@@ -158,7 +158,7 @@ def add_knmi_to_model_dataset(model_ds,
     # find unique combination of precipitation and evaporation station
     unique_combinations = locations.drop_duplicates(['prec_point', 'evap_point'])[
         ['prec_point', 'evap_point']].values
-    
+
     for i, prec_evap in enumerate(unique_combinations):
         # get locations with the same prec and evap station
         loc_sel = locations.loc[(locations['prec_point'] == prec_evap[0]) & (
@@ -171,7 +171,7 @@ def add_knmi_to_model_dataset(model_ds,
         if recharge_ts.index[-1] < end - pd.Timedelta(1, unit='D'):
             raise ValueError(
                 f'no recharge available at precipitation stations {prec_evap[0]} and evaporation station {prec_evap[1]} for date {end}')
-        
+
         # fill recharge data array
         if model_ds.steady_state:
             rch_average = recharge_ts.mean()
@@ -189,14 +189,16 @@ def add_knmi_to_model_dataset(model_ds,
                 recharge_ts.loc[model_ds.time.data[0]] = rch_average
             else:
                 recharge_ts = recharge_ts.loc[model_ds.time.data]
-                
+
             # add data to model_ds_out
             if model_ds.gridtype == 'structured':
                 for row, col in zip(loc_sel.row, loc_sel.col):
-                    model_ds_out['recharge'].data[row, col, :] = recharge_ts.values
-                    
+                    model_ds_out['recharge'].data[row,
+                                                  col, :] = recharge_ts.values
+
             elif model_ds.gridtype == 'unstructured':
-                model_ds_out['recharge'].loc[loc_sel.index, :] = recharge_ts.values
+                model_ds_out['recharge'].loc[loc_sel.index,
+                                             :] = recharge_ts.values
 
     return model_ds_out
 
@@ -221,7 +223,7 @@ def model_datasets_to_rch(gwf, model_ds):
 
     # get stress period data
     if model_ds.steady_state:
-        mask = model_ds['recharge']!=0
+        mask = model_ds['recharge'] != 0
         if model_ds.gridtype == 'structured':
             rch_spd_data = mgrid.data_array_2d_to_rec_list(model_ds, mask,
                                                            col1='recharge',
@@ -239,9 +241,9 @@ def model_datasets_to_rch(gwf, model_ds):
                                       maxbound=len(rch_spd_data),
                                       print_input=True,
                                       stress_period_data={0: rch_spd_data})
-        
+
         return rch
-    
+
     # transient recharge
     if model_ds.gridtype == 'structured':
         empty_str_array = np.zeros_like(model_ds['idomain'][0], dtype="S13")
@@ -250,19 +252,21 @@ def model_datasets_to_rch(gwf, model_ds):
                                             coords={'y': model_ds.y,
                                                     'x': model_ds.x})
         model_ds['rch_name'] = model_ds['rch_name'].astype(str)
-        rch_2d_arr = model_ds['recharge'].data.reshape((model_ds.dims['x']*model_ds.dims['y'], model_ds.dims['time']))
+        rch_2d_arr = model_ds['recharge'].data.reshape(
+            (model_ds.dims['x'] * model_ds.dims['y'], model_ds.dims['time']))
         rch_unique_arr = np.unique(rch_2d_arr, axis=0)
         rch_unique_dic = {}
         for i, unique_rch in enumerate(rch_unique_arr):
-            model_ds['rch_name'].data[(model_ds['recharge'].data == unique_rch).all(axis=2)] = f'rch_{i}'
+            model_ds['rch_name'].data[(
+                model_ds['recharge'].data == unique_rch).all(axis=2)] = f'rch_{i}'
             rch_unique_dic[f'rch_{i}'] = unique_rch
-        
+
         mask = model_ds['rch_name'] != ''
         rch_spd_data = mgrid.data_array_2d_to_rec_list(model_ds, mask,
                                                        col1='rch_name',
                                                        first_active_layer=True,
                                                        only_active_cells=False)
-    
+
     elif model_ds.gridtype == 'unstructured':
         empty_str_array = np.zeros_like(model_ds['idomain'][0], dtype="S13")
         model_ds['rch_name'] = xr.DataArray(empty_str_array,
@@ -272,9 +276,10 @@ def model_datasets_to_rch(gwf, model_ds):
         rch_unique_arr = np.unique(model_ds['recharge'].data, axis=0)
         rch_unique_dic = {}
         for i, unique_rch in enumerate(rch_unique_arr):
-            model_ds['rch_name'][(model_ds['recharge'].data == unique_rch).all(axis=1)] = f'rch_{i}'
+            model_ds['rch_name'][(model_ds['recharge'].data == unique_rch).all(
+                axis=1)] = f'rch_{i}'
             rch_unique_dic[f'rch_{i}'] = unique_rch
-        
+
         mask = model_ds['rch_name'] != ''
         rch_spd_data = mgrid.data_array_unstructured_to_rec_list(model_ds, mask,
                                                                  col1='rch_name',

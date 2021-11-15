@@ -1,14 +1,15 @@
-from itertools import combinations
 import logging
-import networkx as nx
-from networkx.exception import NetworkXNoPath
-import numpy as np
 import operator
-from scipy.spatial import Voronoi
-from scipy.ndimage import filters
-from shapely.geometry import LineString, MultiLineString, Point, MultiPoint
-from shapely.geometry import MultiPolygon, Polygon
+from itertools import combinations
 from warnings import warn
+
+import networkx as nx
+import numpy as np
+from networkx.exception import NetworkXNoPath
+from scipy.ndimage import filters
+from scipy.spatial import Voronoi
+from shapely.geometry import (LineString, MultiLineString, MultiPoint,
+                              MultiPolygon, Point, Polygon)
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +143,8 @@ def _smooth_linestring(linestring, smooth_sigma):
     """Use a gauss filter to smooth out the LineString coordinates."""
     return LineString(
         zip(
-            np.array(filters.gaussian_filter1d(linestring.xy[0], smooth_sigma)),
+            np.array(filters.gaussian_filter1d(
+                linestring.xy[0], smooth_sigma)),
             np.array(filters.gaussian_filter1d(linestring.xy[1], smooth_sigma))
         )
     )
@@ -229,6 +231,7 @@ def _yield_ridge_vertices(vor, geometry, dist=False):
             else:
                 yield x, y
 
+
 def get_centerline_simple(polygon, simplify=10, maxnum=5):
     """
     Return centerline from geometry.
@@ -249,7 +252,7 @@ def get_centerline_simple(polygon, simplify=10, maxnum=5):
         area = [p.area for p in polygon]
         index = np.argmax(area)
         polygon = polygon[index]
-        if np.any(np.delete(np.array(area),index) > area[index]*0.1):
+        if np.any(np.delete(np.array(area), index) > area[index] * 0.1):
             warn('Some parts of the MultiPolygon are larger than 10% of the '
                  'selected Polygon')
     if not isinstance(polygon, Polygon):
@@ -264,7 +267,7 @@ def get_centerline_simple(polygon, simplify=10, maxnum=5):
     longest_paths = _get_longest_paths(end_nodes, graph, maxnum)
     if not longest_paths:
         raise Exception("no paths found between end nodes")
-    
+
     path = _get_least_curved_path(longest_paths, vor.vertices)
     centerline = LineString(vor.vertices[path])
     return centerline
