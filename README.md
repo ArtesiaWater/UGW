@@ -9,7 +9,7 @@ naar het [rapport](./report/rap_bouwsteen_oppervlaktewater_UGW_incl_bijlage.pdf)
 
 -   [Installatie](#Installatie)
 -   [Inhoud repository](#Inhoud-repository)
--   [Vragen, problemen of suggesties?](#Vragen,-problemen-of-suggesties?)
+-   [Vragen, problemen of suggesties?](#Vragen-problemen-of-suggesties?)
 -   [Overzicht workflow](#Overzicht-workflow)
     -   [Ophalen oppervlaktewater gegevens](#Ophalen-oppervlaktewater-gegevens)
     -   [Omzetting naar MODFLOW-invoer](#Omzetting-naar-MODFLOW-invoer)
@@ -51,7 +51,7 @@ toegelicht:
 
 Als je een probleem tegenkomt in de code, of een suggestie hebt voor hoe het beter kan, of voor iets nieuws, dan kan dat via de [GitHub Issues pagina](https://github.com/ArtesiaWater/UGW/issues). Voordat je een issue meldt, kijk eerst of deze niet al door iemand anders is gemeld op deze pagina. Als dat niet zo is, dan kan je een [nieuwe issue](https://github.com/ArtesiaWater/UGW/issues/new/choose) aanmaken. Het development team zal op de issue reageren om het op te pakken. Bugs in de huidige code worden gefixt, voor nieuwe functionaliteit zal overlegd moeten worden.
 
-Mocht je zelf de oplossing weten, of een bijdrage willen leveren aan de code, dan kan dat en dat wordt zeer op prijs gesteld. Zie [deze pagina ]() voor instructies hoe je suggesties of aanpassingen ter beoordeling kan klaarzetten door het core development team.
+Mocht je zelf de oplossing weten, of een bijdrage willen leveren aan de code, dan kan dat en dat wordt zeer op prijs gesteld. Zie [deze pagina ](https://github.com/ArtesiaWater/UGW/blob/8ded1cfbbbb017fa8f15ed0ab5a352ea705f1cbf/CONTRIBUTING.md) voor instructies hoe je suggesties of aanpassingen ter beoordeling kan klaarzetten door het core development team.
 
 Vragen die niet direct over specifieke code/bugs/nieuwe features gaan kunnen gesteld worden via de [Discussions pagina](https://github.com/ArtesiaWater/UGW/discussions).
 
