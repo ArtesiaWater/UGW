@@ -34,12 +34,12 @@ extent_shp = 'extent.shp'
 if 'extent' in config_ini['general'].keys():
     extent_shp = config_ini['general']['extent']
 
-os.chdir('..\..\config')
-project_shp = Path(f'..\data\{project}\{extent_shp}')
-input_dir = Path(f'..\data\{project}\input')
+os.chdir('../../config')
+project_shp = Path(f'../data/{project}/{extent_shp}')
+input_dir = Path(f'../data/{project}/input')
 
-admins = {'file_name': Path(r'..\config\administrations.json')}
-sources = {'file_name': Path(r'..\config\sources.json')}
+admins = {'file_name': Path(r'../config/administrations.json')}
+sources = {'file_name': Path(r'../config/sources.json')}
 admins.update(json.loads(open(admins['file_name'], 'r').read()))
 sources.update(json.loads(open(sources['file_name'], 'r').read()))
 

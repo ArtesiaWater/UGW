@@ -11,7 +11,7 @@
 	},
 	"boundaries": {
 		"type": "file",
-		"path": "..\\data\\sources\\admins.shp",
+		"path": "../data/sources/admins.shp",
 		"id_field": "id"
 	}
 }

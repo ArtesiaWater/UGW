@@ -6,11 +6,11 @@ import xml.etree.ElementTree as ET
 from io import StringIO
 
 import fiona
-import gdal
 import geopandas as gpd
 import pandas as pd
 import pyproj
 import requests
+from osgeo import gdal
 
 
 def wfs2gdf(url, crs, output_type, timeout):

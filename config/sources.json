@@ -46,7 +46,7 @@
 			"type": "arcrest"
 		},
 		"rivierenland_peilvakken": {
-			"url": "https://kaarten.wsrl.nl/arcgis/rest/services/Kaarten/Vigerend_Peilgebieden/MapServer",
+			"url": "https://kaarten.wsrl.nl/arcgis/rest/services/Kaarten/Peilgebieden_vigerend/MapServer",
 			"type": "arcrest"
 		},
 		"h&a_legger": {
@@ -54,7 +54,7 @@
 			"type": "arcrest"
 		},
 		"V&V_GIS": {
-			"url": "..\\data\\sources\\V&V\\GISbestanden WVV.gdb",
+			"url": "../data/sources/V&V/GISbestanden WVV.gdb",
 			"type": "gdb"
 		},
 		"rws_krw": {
@@ -69,19 +69,19 @@
 	},
 	"files": {
 		"hsk_peilvakken": {
-			"path": "..\\data\\sources\\HSK\\PeilgebiedenlaagHHSK_20200409.shp"
+			"path": "../data/sources/HSK/PeilgebiedenlaagHHSK_20200409.shp"
 		},
 		"rivierenland_waterlijnen": {
-			"path": "..\\data\\sources\\Rivierenland\\waterlijnen_20200724.shp"
+			"path": "../data/sources/Rivierenland/waterlijnen_20200724.shp"
 		},
 		"waternet_peilvakken": {
-			"path": "..\\data\\sources\\Waternet\\VigerendePeilgebieden_edit_20200523.shp"
+			"path": "../data/sources/Waternet/VigerendePeilgebieden_edit_20200523.shp"
 		},
 		"zuiderzeeland_waterlijnen": {
-			"path": "..\\data\\sources\\Zuiderzeeland\\Profiel_merged_20200724.shp"
+			"path": "../data/sources/Zuiderzeeland/Profiel_merged_20200724.shp"
 		},
 		"zuiderzeeland_peilvakken": {
-			"path": "..\\data\\sources\\Zuiderzeeland\\Peilgebieden Besluit.shp"
+			"path": "../data/sources/Zuiderzeeland/Peilgebieden Besluit.shp"
 		}
 	},
 	"water_areas": {
@@ -280,7 +280,7 @@
 				"WP": "winterpeil",
 				"VP": [
 					"VASTPEIL",
-					"streefpeil"
+					"STREEFPEIL"
 				],
 				"FPO": "min_peil",
 				"FPB": "max_peil",
