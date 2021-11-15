@@ -28,6 +28,7 @@ dependencies:
     - pyproj
     - xlrd
     - zeep
+    - pyshp
     - flopy
     - rasterstats
     - hydropandas
