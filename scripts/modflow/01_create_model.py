@@ -90,6 +90,13 @@ else:
     bbox = (extent[0], extent[2], extent[1], extent[3])
     sfw = gpd.read_file(water_shp, bbox=bbox)
 
+# sfw2 = sfw.loc[:, ["src_id_wl", "src_id_wla",
+#                    "ZP", "WP", "BL", "geometry"]].copy()
+# sfw2.columns = ["unique_id", "peilvak_id", "zp", "wp", "botm", "geometry"]
+# sfw2["stage"] = sfw2.loc[:, ["zp", "wp"]].mean(axis=1)
+# sfw2 = sfw2.loc[:, ["unique_id", "peilvak_id",
+#                     "zp", "wp", "stage", "botm", "geometry"]]
+
 # drop duplicates
 mask = sfw["geometry"].apply(lambda geom: geom.wkb)
 dupes = mask.drop_duplicates()
@@ -279,7 +286,6 @@ for file in bathshp['FILE'].dropna():
     bath = bath.where(np.isnan(zt) | (bath < zt), zt)
 # apparently bathymetry is in mm
 model_ds['bathymetry'] = bath = bath / 1000.
-
 # fill bathymetry by ahn, so there is always data
 model_ds['bathymetry'] = model_ds['bathymetry'].fillna(model_ds['ahn_min'])
 # and otherwise fill by the top of the model
@@ -414,9 +420,9 @@ if not sfw_slope.empty:
 
 # update dataset
 maskdrn = sfw_slope.SUB == 0
-sfw_slope.loc[maskdrn,"bc"] = "riv_drn"
+sfw_slope.loc[maskdrn, "bc"] = "riv_drn"
 maskinf = sfw_slope.SUB == 1
-sfw_slope.loc[maskinf,"bc"] = "riv_inf"
+sfw_slope.loc[maskinf, "bc"] = "riv_inf"
 sfw_grid.update(sfw_slope)
 print("Features added to RIV_inf dataset.")
 
@@ -424,8 +430,9 @@ print("Features added to RIV_inf dataset.")
 
 # get the bottom height from the bathymetry-data
 mask_bath = sfw_grid.has_bath == 1
-row, col = zip(*sfw_grid.loc[mask_bath, 'cellid'])
-sfw_grid.loc[mask_bath, 'BL'] = model_ds['bathymetry'].values[row, col]
+if mask_bath.sum() > 1:
+    row, col = zip(*sfw_grid.loc[mask_bath, 'cellid'])
+    sfw_grid.loc[mask_bath, 'BL'] = model_ds['bathymetry'].values[row, col]
 
 mask_riv = sfw_grid["bc"] == "riv_inf"
 sfw_riv_inf = sfw_grid.loc[mask_riv]
@@ -646,7 +653,7 @@ oc = fp.mf6.ModflowGwfoc(gwf,
 # %% timing
 postmodel = default_timer()
 print(f"\nElapsed time up to model solve: {postmodel-start:.1f} s")
-1/0
+
 # %% Write simulation files
 sim.write_simulation()
 
@@ -737,10 +744,10 @@ if plot_input:
     ax.set_aspect("equal", adjustable="box")
 
     sfw.plot(color="gray", alpha=0.8, ax=ax)
-    
+
     m = (masknone) & (sfw.BL.isna())
     sfw.loc[m].plot(color="red", ax=ax)
-    
+
     xmin, ymin, xmax, ymax = sfw.total_bounds
     ax.set_xlim(xmin, xmax)
     ax.set_ylim(ymin, ymax)
@@ -757,10 +764,10 @@ if plot_input:
     fig, ax = plt.subplots(1, 1, figsize=(12, 12))
     ax.set_aspect("equal", adjustable="box")
     sfw.plot(color="gray", alpha=0.8, ax=ax)
-    
+
     m = (masknone) & (sfw.src_id_wla.isna())
     sfw.loc[m].plot(color="red", ax=ax)
-    
+
     xmin, ymin, xmax, ymax = sfw.total_bounds
     ax.set_xlim(xmin, xmax)
     ax.set_ylim(ymin, ymax)
