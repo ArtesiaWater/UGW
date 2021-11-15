@@ -22,7 +22,8 @@ dependencies:
   - openpyxl
   - requests
   - owslib
-  - osgeo
+  - netCDF4
+  - pydap
   - pip:
     - pyproj
     - xlrd
