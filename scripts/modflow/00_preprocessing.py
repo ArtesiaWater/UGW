@@ -5,8 +5,8 @@ import zipfile
 import geopandas as gpd
 import xarray as xr
 
-sys.path.append("../../../NHFLO/NHFLOPY")
-from modules import mgrid, util
+sys.path.append("..")
+from nhflopy import mgrid, util
 
 datadir = '../../data'
 modelname = "heel_gebied"
