@@ -42,11 +42,11 @@
 			"format": "json"
 		},
 		"rivierenland_legger": {
-			"url": "https://kaarten.wsrl.nl/arcgis/rest/services/Kaarten/Legger_Watersysteem/MapServer",
-			"type": "arcrest"
+			"url": " ",
+			" ": "arcrest"
 		},
 		"rivierenland_peilvakken": {
-			"url": "https://kaarten.wsrl.nl/arcgis/rest/services/Kaarten/Vigerend_Peilgebieden/MapServer",
+			"url": "https://kaarten.wsrl.nl/arcgis/rest/services/Kaarten/Peilgebieden_vigerend/MapServer",
 			"type": "arcrest"
 		},
 		"h&a_legger": {
@@ -87,10 +87,7 @@
 	"water_areas": {
 		"HDSR": {
 			"source": "bgt",
-			"layer": [
-				"waterdeel",
-				"waterdeel"
-			],
+			"layer": "waterdeel",
 			"bronhouder": "W0636",
 			"attributes": {
 				"src_id": "gml_id"
@@ -197,18 +194,13 @@
 		"V&V": {
 			"source": "v&v_legger",
 			"layers": [
-				14,
-				15,
-				16
+				16,
+				17,
+				18
 			],
 			"attributes": {
-				"src_id": "OVKIDENT",
-				"name": "OSMOMSCH",
-				"BB": "AVVBODDR",
-				"BL": "AVVBODH",
-				"BLU": "AVVHOBOS",
-				"BLD": "AVVHOBES",
-				"CAT": "layer_name"
+				"src_id": "CODE",
+				"name": "NAAM"
 			}
 		},
 		"Waternet": {
@@ -216,8 +208,8 @@
 			"layer": 19,
 			"attributes": {
 				"src_id": "CODE",
-				"BB": "BODEMBREEDTE",
-				"BL": "BODEMHOOGTE",
+				"BB": "AVVBODDR",
+				"BL": "AVVBODH",
 				"CAT": "CATEGORIE",
 				"VP": "WATERPEIL"
 			}
@@ -275,24 +267,24 @@
 			"layer": 0,
 			"object_id": "se_sdo_rowid",
 			"attributes": {
-				"src_id": "code",
-				"ZP": "zomerpeil",
-				"WP": "winterpeil",
+				"src_id": "CODE",
+				"ZP": "ZOMERPEIL",
+				"WP": "WINTERPEIL",
 				"VP": [
 					"VASTPEIL",
-					"streefpeil"
+					"STREEFPEIL"
 				],
-				"FPO": "min_peil",
-				"FPB": "max_peil",
-				"ZFPO": "ondermarge_zomer",
-				"ZFPB": "bovenmarge_zomer",
-				"WFPO": "ondermarge_winter",
-				"WFPB": "bovenmarge_winter"
+				"FPO": "MIN_PEIL",
+				"FPB": "MAX_PEIL",
+				"ZFPO": "ONDERMARGE_ZOMER",
+				"ZFPB": "BOVENMARGE_ZOMER",
+				"WFPO": "ONDERMARGE_WINTER",
+				"WFPB": "BOVENMARGE_WINTER"
 			}
 		},
 		"RWS": {
 			"source": "rws_krw",
-			"layer": "kaderrichtlijn_water:oppervlaktewater_lichamen_v",
+			"layer": "kaderrichtlijn_water:KRW_oppervlaktewaterlichamen_vlak",
 			"attributes": {
 				"src_id": "OWMIDENT",
 				"name": "OWMNAAM"
