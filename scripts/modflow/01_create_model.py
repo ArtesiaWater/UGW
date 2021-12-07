@@ -630,9 +630,10 @@ if not os.path.isfile(rivobs_fname):
                                                 tmax=(model_ds.time.values[-1]
                                                       + np.timedelta64(perlen, "D")))
 
-surface_water.waterinfo_to_ghb(rivobs_fname, riv2stn, gdf_rws, gwf, model_ds,
-                               intersect_method="vertex")
-surfwat_pkgs.append("GHB")
+if not gdf_rws.empty:
+    surface_water.waterinfo_to_ghb(rivobs_fname, riv2stn, gdf_rws, gwf,
+                                   model_ds, intersect_method="vertex")
+    surfwat_pkgs.append("GHB")
 
 # %% OC
 
@@ -670,7 +671,7 @@ end = default_timer()
 print(f"\nElapsed time: {end-start:.1f} s")
 
 # %% plot input
-plot_input = False
+plot_input = True
 
 if plot_input:
 
