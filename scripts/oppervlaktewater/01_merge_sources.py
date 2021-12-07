@@ -22,6 +22,7 @@ import get_bgt
 import services
 
 start = time.time()
+pd.options.mode.chained_assignment = None
 bgt_service = 'website'
 
 # %% alle paden van output bestanden
@@ -70,9 +71,9 @@ def set_crs(gdf, crs=sources['default_crs']):
         if hasattr(pyproj, 'CRS'):
             update_crs = not pyproj.CRS(gdf.crs).equals(pyproj.CRS(crs))
         else:
-            update_crs = pyproj.Proj(gdf.crs).srs != pyproj.Proj(init=crs).srs
+            update_crs = pyproj.Proj(gdf.crs).srs != pyproj.Proj(crs).srs
         if update_crs:
-            gdf = gdf.to_crs({'init': crs})
+            gdf = gdf.to_crs(crs)
 
     return gdf
 

@@ -39,9 +39,9 @@ def set_crs(gdf, crs='epsg:28992'):
         if hasattr(pyproj, 'CRS'):
             update_crs = not pyproj.CRS(gdf.crs).equals(pyproj.CRS(crs))
         else:
-            update_crs = pyproj.Proj(gdf.crs).srs != pyproj.Proj(init=crs).srs
+            update_crs = pyproj.Proj(gdf.crs).srs != pyproj.Proj(crs).srs
         if update_crs:
-            gdf = gdf.to_crs({'init': crs})
+            gdf = gdf.to_crs(crs)
 
     return gdf
 
@@ -187,7 +187,7 @@ class ArcREST:
         except Exception as e:
             logging.error(
                 'Processing data from the following url failed: {} with error {}'.format(url, e))
-
+            raise e
 
 class WFS:
 
