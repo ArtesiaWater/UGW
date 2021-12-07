@@ -681,9 +681,12 @@ if plot_input:
 
     for ilay in np.arange(gwf.modelgrid.nlay):
         mv = fp.plot.PlotMapView(gwf, layer=ilay, ax=ax)
-        mv.plot_bc("RIV_DRN", color=(1, 1, 0, 0.5))
-        mv.plot_bc("RIV_INF", color=(0, 0, 128 / 255., 0.5))
-        mv.plot_bc("GHB", color=(173 / 255., 216 / 255., 230 / 255., 0.6))
+        if "RIV_DRN" in surfwat_pkgs:
+            mv.plot_bc("RIV_DRN", color=(1, 1, 0, 0.5))
+        if "RIV_INF" in surfwat_pkgs:
+            mv.plot_bc("RIV_INF", color=(0, 0, 128 / 255., 0.5))
+        if "GHB" in surfwat_pkgs:
+            mv.plot_bc("GHB", color=(173 / 255., 216 / 255., 230 / 255., 0.6))
 
     sfw.plot(color="red", alpha=0.5, ax=ax, zorder=3)
 
@@ -710,15 +713,20 @@ if plot_input:
     fig, ax = plt.subplots(1, 1, figsize=(12, 12), dpi=150)
     ax.set_aspect("equal", adjustable="box")
     maskrws = sfw.bc == "ghb"
-    sfw.loc[maskrws].plot(color="lightblue", ax=ax)  # GHB, large rivs
+    if maskrws.sum() > 0:
+        sfw.loc[maskrws].plot(color="lightblue", ax=ax)  # GHB, large rivs
     maskrivdrn = sfw.bc == "riv_drn"
-    sfw.loc[maskrivdrn].plot(color="orange", ax=ax)  # DRN, drainage
+    if maskrivdrn.sum() > 0:
+        sfw.loc[maskrivdrn].plot(color="orange", ax=ax)  # DRN, drainage
     maskrivinf = sfw.bc == "riv_inf"
-    sfw.loc[maskrivinf].plot(color="navy", ax=ax)  # RIV, can supply water
+    if maskrivinf.sum() > 0:
+        sfw.loc[maskrivinf].plot(color="navy", ax=ax)  # RIV, can supply water
     maskslope = sfw.bc == "riv_slp"
-    sfw.loc[maskslope].plot(color="limegreen", ax=ax)  # RIV, has slope
+    if maskslope.sum() > 0:
+        sfw.loc[maskslope].plot(color="limegreen", ax=ax)  # RIV, has slope
     masknone = sfw.bc == "none"
-    sfw.loc[masknone].plot(color="red", ax=ax)  # NOT PARSED!
+    if masknone.sum() > 0:
+        sfw.loc[masknone].plot(color="red", ax=ax)  # NOT PARSED!
 
     patches = []
     colors = ["lightblue", "orange", "navy", "limegreen", "red"]
