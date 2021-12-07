@@ -112,7 +112,7 @@ class ArcREST:
                     object_ids = response.json()['objectIds']
                 else:
                     object_ids = response.json()['properties']['objectIds']
-                if object_ids == None:
+                if (object_ids == None) | (object_ids == []):
                     return gpd.GeoDataFrame()
                 else:
                     object_ids.sort()
