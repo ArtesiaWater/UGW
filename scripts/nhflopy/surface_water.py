@@ -635,7 +635,7 @@ def waterinfo_to_ghb(fname, riv2stn, gdfv, gwf, model_ds, gdfl=None,
     if 'cellid' not in gdfv.columns:
         gdfv = gdf2grid(gdfv, gwf, method=intersect_method)
 
-    for key in gdfv.index.unique():
+    for key in tqdm(gdfv.index.unique(), desc="Build GHB spd"):
         # where along the line are the measuring stations?
         # check if all stations are in the file
         mask = np.array([stn in meta.index for stn in riv2stn[key]])
@@ -730,16 +730,25 @@ def waterinfo_to_ghb(fname, riv2stn, gdfv, gwf, model_ds, gdfl=None,
                         spd[ftp].append([(lay,) + row.cellid, ts, condi])
 
     ghb = flopy.mf6.ModflowGwfghb(gwf, stress_period_data=spd, save_flows=True)
-    for i, stn in enumerate(used_stns):
+    for i, stn in tqdm(enumerate(used_stns), desc="Write timeseries",
+                       total=len(used_stns)):
         # make time series
         s = meta.at[stn, 'series']
-        index = (s.index - pd.Timestamp(gwf.modeltime.start_datetime)
+        if s.last_valid_index() < pd.Timestamp(model_ds.time.data[-1]):
+            print(f"WARNING! No data in {stn} till end of model period. "
+                  "Filling with mean value.")
+            s.loc[pd.Timestamp(model_ds.time.data[-1])] = s.mean()
+        index = (s.index - pd.Timestamp(model_ds.start_time)
                  ) / pd.Timedelta(1, 'd')
         timeseries = list(zip(index, s.values))
+
         stn = stn.replace('/', '').replace(' ', '_')
-        ts = {'filename': '{}.ts'.format(stn), 'timeseries': timeseries,
-              'time_series_namerecord': stn,
-              'interpolation_methodrecord': 'linear'}
+        ts = {
+            'filename': '{}.ts'.format(stn),
+            'timeseries': timeseries,
+            'time_series_namerecord': stn,
+            'interpolation_methodrecord': 'linear'
+        }
         if i == 0:
             ghb.ts.initialize(**ts)
         else:

@@ -40,7 +40,7 @@ delr = 500.            # zelfde als dx
 delc = 500.            # zelfde als dy
 
 # tijdsdiscretisatie
-steady_state = True  # steady state flag, if True, parameters below are not used
+steady_state = False  # steady state flag, if True, parameters below are not used
 steady_start = True  # if True start transient model with steady timestep
 nstp = 1  # no. of timesteps per stress period
 perlen = 10  # length of timestep in time_units (default is days)
@@ -144,7 +144,7 @@ tdis = fp.mf6.ModflowTdis(sim,
                           pname='tdis',
                           time_units=model_ds.time_units,
                           nper=model_ds.nper,
-                          start_date_time=model_ds.start_time,
+                          start_date_time=model_ds.start_time.replace('', "T"),
                           perioddata=tdis_perioddata)
 
 # %% GWF
@@ -458,7 +458,21 @@ sfw.loc[mb, "bc"] = "none"
 if not sfw_riv_inf.empty:
     riv_data = surface_water.aggregate_surface_water(
         sfw_riv_inf, model_ds=model_ds, method=agg_method)
-    riv_spd = surface_water.build_spd(riv_data, "RIV", model_ds)
+    unique_src_id_wla = sfw_grid.set_index("src_id_wla").index.duplicated()
+    riv_data = riv_data.join(
+        sfw_grid.set_index("src_id_wla").loc[~unique_src_id_wla, ["ZP", "WP"]],
+        on="name_largest", how="left")
+
+    # ensure bottom level is always below ZP/WP for transient models
+    if not steady_state:
+        mask = riv_data["rbot"] > riv_data.loc[:, ("ZP", "WP")].min(axis=1)
+        print(f"WARNING: river bottom level is above ZP/WP in {mask.sum()}"
+              " locations. Setting 'rbot' equal to min([ZP, WP]).")
+        # subtract small value to ensure rbot is below timeseries value
+        riv_data.loc[mask, "rbot"] = (riv_data.loc[mask, ("ZP", "WP")]
+                                      .min(axis=1) - 1e-3)
+
+    riv_spd = surface_water.build_spd(riv_data.round(5), "RIV", model_ds)
 else:
     riv_spd = []
 
@@ -543,7 +557,12 @@ mend = model_ds.time.isel(time=-1).to_pandas()
 if not steady_state:
     if len(riv_spd) > 0:
         # RIV timeseries
-        tseries_list = surface_water.create_timeseries(drn_data, mstart, mend)
+        # add ZP/WP to drn_data
+        celldata = drn_data.join(
+            sfw_grid.set_index(
+                "src_id_wla").loc[~unique_src_id_wla, ["ZP", "WP"]],
+            on="name_largest", how="left")
+        tseries_list = surface_water.create_timeseries(celldata, mstart, mend)
 
         ts0 = tseries_list[0]
         drn.ts.initialize(filename=f'DRN_{ts0.name}.ts',
@@ -631,8 +650,8 @@ if not os.path.isfile(rivobs_fname):
                                                       + np.timedelta64(perlen, "D")))
 
 if not gdf_rws.empty:
-    surface_water.waterinfo_to_ghb(rivobs_fname, riv2stn, gdf_rws, gwf,
-                                   model_ds, intersect_method="vertex")
+    ghb = surface_water.waterinfo_to_ghb(rivobs_fname, riv2stn, gdf_rws, gwf,
+                                         model_ds, intersect_method="vertex")
     surfwat_pkgs.append("GHB")
 
 # %% OC
