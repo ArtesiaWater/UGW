@@ -34,16 +34,16 @@ if 'extent' in config_ini['general'].keys():
     extent_shp = config_ini['general']['extent']
 
 # %% paths
-os.chdir('..\..\config')
-admins = {'file_name': Path(r'..\config\administrations.json')}
-sources = {'file_name': Path(r'..\config\sources.json')}
-validation = {'file_name': Path(r'..\config\validation.json')}
+os.chdir('../../config')
+admins = {'file_name': Path(r'../config/administrations.json')}
+sources = {'file_name': Path(r'../config/sources.json')}
+validation = {'file_name': Path(r'../config/validation.json')}
 
 admins.update(json.loads(open(admins['file_name'], 'r').read()))
 sources.update(json.loads(open(sources['file_name'], 'r').read()))
 validation.update(json.loads(open(validation['file_name'], 'r').read()))
 
-data_dir = Path(f'..\data\{project}').absolute().resolve()
+data_dir = Path(f'../data/{project}').absolute().resolve()
 input_dir = data_dir.joinpath('input')
 project_shp = input_dir.joinpath(extent_shp)
 
@@ -52,9 +52,9 @@ wl_areas_shp = input_dir.joinpath('water-level_areas.shp')
 w_areas_shp = input_dir.joinpath('water_areas.shp')
 w_lines_shp = input_dir.joinpath('water_lines.shp')
 dem_tif = input_dir.joinpath('ahn3_5m_dtm.tif')
-bathymetry_shp = r'..\data\sources\Bathymetry\bathymetry_masks.shp'
+bathymetry_shp = r'../data/sources/Bathymetry/bathymetry_masks.shp'
 
-modflow_dir = Path(f'..\data\{project}\modflow').absolute().resolve()
+modflow_dir = Path(f'../data/{project}/modflow').absolute().resolve()
 mod_areas_shp = modflow_dir.joinpath('waterareas.shp')
 ma_verdict_shp = modflow_dir.joinpath('waterareas_verdict.shp')
 ma_verdict_json = modflow_dir.joinpath('waterareas_verdict.geojson')
