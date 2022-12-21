@@ -165,3 +165,4 @@ scripts/modflow/acacia_wsp/wsp_surface_water_areas.zip
 scripts/modflow/acacia_wsp/zp.idf
 scripts/modflow/acacia_wsp/cache_wsp/sfw_grid.pkl
 scripts/modflow/acacia_wsp/cache_wsp/sfw_grid.pkl.nc
+scripts/modflow/acacia_wsp/create_surface_water_IDFs.ipynb
